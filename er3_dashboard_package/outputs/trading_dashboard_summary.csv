@@ -1,0 +1,6 @@
+Fly,Current Value,Percentile Rank 252d,Z-Score 60d,Signal,Suggested Action,Key Hedge
+Fly6,0.015000000000000568,97.61904761904762,1.7328366060178966,SHORT,Short Fly6: z and percentile both rich,-0.16 Fly9 per +1 Fly6
+Fly7,-0.01999999999999602,23.809523809523807,1.7831849870983039,SHORT,Short Fly7 tactically; signal is recent-regime rich,+0.26 Fly8 per +1 Fly7
+Fly8,-0.025000000000005684,3.1746031746031744,-1.3884163920466082,LONG,Long watch Fly8; percentile cheap,+0.20 Fly7 per +1 Fly8
+Fly9,-0.012500000000002842,5.952380952380952,-0.6990144801116193,LONG,Long watch Fly9; percentile cheap,+0.44 Fly10 per +1 Fly9
+Fly10,-0.009999999999990905,3.571428571428571,-1.7794347740557919,LONG,Long Fly10: z and percentile both cheap,+0.31 Fly9 per +1 Fly10
