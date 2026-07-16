@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Build two- and three-leg EURIBOR structures and inspect their signed ECB meeting impact.">
+  <title>EURIBOR Meeting Impact Builder</title>
+  <style>
+    :root{--page:#070b12;--well:#08111b;--panel:#0d1420;--raised:#101927;--input:#0a121d;--border:#263448;--grid:rgba(64,91,116,.25);--text:#e6edf7;--secondary:#a8b5c8;--muted:#8090a6;--disabled:#536277;--cyan:#22d3ee;--amber:#f59e0b;--green:#34d399;--red:#f87171;--violet:#a78bfa}
+    *{box-sizing:border-box}html{scroll-behavior:smooth;background:var(--page)}body{margin:0;background:radial-gradient(circle at 85% 0%,rgba(21,84,114,.12),transparent 30%),linear-gradient(180deg,#070b12,#08111b);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}button,select,input{font:inherit}button,a,select,input{outline:none}button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{box-shadow:0 0 0 2px var(--cyan)}button{color:inherit}.shell{min-height:100vh}.mono,.metric strong,.basis strong,.expression strong,select,input,.meeting-date,.meeting-row strong,.result strong,td{font-family:"IBM Plex Mono","SFMono-Regular",Consolas,monospace}
+    .topbar{height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:rgba(5,10,17,.94);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20;backdrop-filter:blur(12px)}.brand{font-size:21px;font-weight:750;letter-spacing:-.025em}.status{display:flex;align-items:center;gap:16px;color:var(--secondary);font-size:12px;font-weight:700;letter-spacing:.08em}.live{color:var(--green)}.live i{width:9px;height:9px;display:inline-block;margin-right:7px;border-radius:50%;background:var(--green);box-shadow:0 0 14px rgba(52,211,153,.7)}.sep{width:1px;height:20px;background:var(--border)}
+    .summary{min-height:74px;display:grid;grid-template-columns:minmax(300px,1.5fr) repeat(6,minmax(105px,.62fr)) minmax(150px,.8fr);border-bottom:1px solid var(--border);background:rgba(8,17,27,.92)}.tabs,.metric,.basis{border-right:1px solid rgba(38,52,72,.65)}.tabs{display:grid;grid-template-columns:repeat(4,1fr)}.tabs a{color:var(--muted);display:grid;place-items:center;text-decoration:none;font-size:11px;font-weight:800;letter-spacing:.1em;position:relative}.tabs a.active{color:var(--text);background:rgba(16,25,39,.6)}.tabs a.active:after{content:"";position:absolute;left:20px;right:20px;bottom:11px;height:2px;background:var(--cyan)}.metric,.basis{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px}.metric span,.basis span{color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.1em}.metric strong,.basis strong{font-size:19px;white-space:nowrap}.cyan{color:var(--cyan)!important}.amber{color:var(--amber)!important}.violet{color:var(--violet)!important}
+    .workspace{display:grid;grid-template-columns:minmax(580px,56%) minmax(460px,44%);min-height:calc(100vh - 124px)}.builder,.results{padding:18px 22px 24px;min-width:0}.builder{border-right:1px solid var(--border)}.heading,.results-heading,.detail-heading{display:flex;align-items:center;justify-content:space-between;gap:18px}.heading h1,.results-heading h2{margin:0;font-size:14px;letter-spacing:.05em}.heading h1{color:var(--secondary);font-size:13px}.actions{display:flex;gap:10px}.plain,.copy{min-height:34px;border:0;cursor:pointer;font-size:11px;font-weight:800;letter-spacing:.08em}.plain{background:transparent;color:var(--secondary)}.copy{padding:0 16px;color:#031119;background:linear-gradient(180deg,#34e0f5,#11c2de);border:1px solid #65e9fa;border-radius:3px}.leg-count{display:grid;grid-template-columns:1fr 1fr;width:min(296px,100%);margin:16px auto 12px}.leg-count button{height:44px;border:1px solid var(--border);background:var(--input);color:var(--secondary);cursor:pointer}.leg-count button:first-child{border-radius:4px 0 0 4px}.leg-count button:last-child{border-radius:0 4px 4px 0}.leg-count .selected{color:var(--cyan);border-color:var(--cyan);background:rgba(34,211,238,.12)}.leg-stack{display:grid;gap:16px}
+    .leg{border:1px solid var(--border);border-radius:4px;background:linear-gradient(180deg,rgba(13,20,32,.98),rgba(8,18,29,.98));overflow:hidden}.leg>header{min-height:44px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid rgba(38,52,72,.65)}.leg h2{margin:0;color:var(--cyan);font-size:14px;letter-spacing:.09em}.leg.leg2 h2,.leg.leg2 .expression strong{color:var(--amber)}.leg.leg3 h2,.leg.leg3 .expression strong{color:var(--violet)}.expression{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.08em;white-space:nowrap}.expression strong{color:var(--cyan);margin-left:9px;font-size:13px;letter-spacing:0}.field-title{margin:13px 16px 7px;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.09em}.instrument-tabs{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;padding:0 16px}.instrument-tabs button{height:40px;padding:0 4px;color:var(--secondary);background:var(--input);border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:11px}.instrument-tabs button:hover{border-color:#445d7c}.instrument-tabs .selected{color:var(--cyan);border-color:var(--cyan);background:rgba(34,211,238,.12)}.leg2 .instrument-tabs .selected{color:var(--amber);border-color:var(--amber);background:rgba(245,158,11,.13)}.leg3 .instrument-tabs .selected{color:var(--violet);border-color:var(--violet);background:rgba(167,139,250,.12)}
+    .leg-fields{padding:14px 16px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));align-items:end;gap:10px}.leg-fields label,.leg-fields fieldset{min-width:0;margin:0;padding:0;border:0}.leg-fields label>span,.leg-fields legend{display:block;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.07em;margin:0 0 6px 3px}.leg-fields select,.leg-fields input{width:100%;height:42px;color:var(--text);background:var(--input);border:1px solid var(--border);border-radius:3px;padding:0 11px;font-size:14px;font-weight:650}.direction{display:grid;grid-template-columns:1fr 1fr;height:42px}.direction button{background:var(--input);border:1px solid var(--border);cursor:pointer;font-size:10px;font-weight:800}.direction .long.selected{color:var(--cyan);border-color:var(--cyan);background:rgba(34,211,238,.12)}.direction .short.selected{color:var(--red);border-color:#dc4b55;background:rgba(248,113,113,.1)}.ratio{max-width:132px}.third{height:80px;color:var(--muted);background:rgba(8,17,27,.45);border:1px dashed #3a4d66;border-radius:3px;cursor:pointer;font-size:11px;font-weight:800;letter-spacing:.09em}.third:hover{color:var(--cyan);border-color:var(--cyan)}
+    .results{background:linear-gradient(180deg,rgba(8,17,27,.56),rgba(7,11,18,.2))}.view{height:34px;display:grid;place-items:center;padding:0 12px;border:1px solid var(--border);border-radius:3px;color:var(--muted);background:var(--input);font-size:9px;font-weight:800;letter-spacing:.09em}.net{height:58px;display:flex;align-items:center;justify-content:space-between;margin:12px 0 14px;padding:0 16px;border:1px solid var(--border);border-radius:4px;background:linear-gradient(90deg,rgba(13,20,32,.94),rgba(8,22,34,.88))}.net span,.chart-title,.contribution-title{color:var(--secondary);font-size:10px;font-weight:750}.net strong{font-size:clamp(23px,2vw,33px)}.positive{color:var(--cyan)!important}.negative{color:var(--amber)!important}.chart-title{display:flex;justify-content:space-between;padding:0 2px 8px}.chart-title span:last-child{color:var(--muted);font-size:8px}.meeting-chart{height:350px;overflow-y:auto;border:1px solid rgba(38,52,72,.75);background-image:linear-gradient(to right,transparent 24.8%,var(--grid) 25%,transparent 25.2%,transparent 49.8%,rgba(128,144,166,.45) 50%,transparent 50.2%,transparent 74.8%,var(--grid) 75%,transparent 75.2%),linear-gradient(to bottom,var(--grid) 1px,transparent 1px);background-size:100% 100%,100% 34px;scrollbar-color:#30415a var(--well);scrollbar-width:thin}.meeting-row{width:100%;min-height:34px;display:grid;grid-template-columns:92px minmax(150px,1fr) 72px;align-items:center;padding:0 8px;border:0;border-bottom:1px dotted rgba(64,91,116,.32);background:transparent;cursor:pointer}.meeting-row:hover,.meeting-row.selected{background:rgba(34,211,238,.055)}.meeting-row.selected{box-shadow:inset 2px 0 var(--cyan)}.meeting-date{text-align:left;font-size:10px;font-weight:650}.bar-zone{height:22px;position:relative}.zero{position:absolute;top:-6px;bottom:-6px;left:50%;width:1px;background:rgba(214,225,238,.75)}.bar{position:absolute;top:3px;bottom:3px;min-width:1px}.bar.pos{background:linear-gradient(90deg,#0794af,#32daf1);border:1px solid #5ce7f7}.bar.neg{background:linear-gradient(270deg,#d78205,#ffb51f);border:1px solid #ffc956}.meeting-row strong{text-align:right;font-size:11px}.axis{display:flex;justify-content:space-between;margin:6px 72px 12px 102px;color:var(--muted);font-size:8px}.contribution-title{margin-bottom:7px}.contributions{display:flex;min-height:42px;border:1px solid rgba(38,52,72,.75);overflow-x:auto}.contribution{min-width:190px;flex:1 0 auto;display:flex;align-items:center;gap:7px;padding:0 10px;border-right:1px solid rgba(38,52,72,.75);font-size:8px}.contribution i{width:8px;height:8px;background:var(--cyan)}.contribution.leg2 i{background:var(--amber)}.contribution.leg3 i{background:var(--violet)}.contribution code{color:var(--secondary);font-size:8px}.contribution strong{margin-left:auto}.contribution.total{min-width:105px;flex:0 0 105px}.tiles{display:grid;grid-template-columns:repeat(3,1fr);margin:12px -22px -24px;border-top:1px solid var(--border)}.result{min-height:98px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-right:1px solid var(--border);background:rgba(9,19,31,.66)}.result span,.result small{color:var(--muted);font-size:8px;font-weight:800;letter-spacing:.09em}.result strong{font-size:clamp(21px,2vw,30px)}
+    .detail{padding:34px 22px 26px;border-top:1px solid var(--border);background:#080e17}.detail-heading{margin-bottom:18px}.detail-heading h2{margin:4px 0 0;font-size:22px}.eyebrow{color:var(--cyan);font-size:9px;font-weight:800;letter-spacing:.09em}.detail-heading p{max-width:650px;margin:0;color:var(--muted);font-size:11px}.table-wrap{overflow-x:auto;border:1px solid var(--border)}table{width:100%;min-width:760px;border-collapse:collapse;font-size:10px}th,td{height:36px;padding:0 14px;text-align:right;border-bottom:1px solid rgba(38,52,72,.6)}th{color:var(--muted);background:#0d1623;font-size:9px;letter-spacing:.08em;text-transform:uppercase}th:first-child,td:first-child{text-align:left}tbody tr{cursor:pointer}tbody tr:hover,tbody tr.selected{background:rgba(34,211,238,.055)}tbody tr.selected{box-shadow:inset 2px 0 var(--cyan)}.detail footer{display:flex;justify-content:space-between;gap:20px;padding-top:14px;color:var(--disabled);font-size:8px;font-weight:800;letter-spacing:.08em}
+    @media(max-width:1200px){.summary{grid-template-columns:minmax(300px,1.5fr) repeat(4,1fr)}.summary .metric:nth-of-type(n+5),.basis{display:none}.workspace{grid-template-columns:1fr}.builder{border-right:0;border-bottom:1px solid var(--border)}.results{min-height:720px}.meeting-chart{height:430px}}
+    @media(max-width:760px){.topbar{padding:0 14px}.brand{font-size:16px}.status>span:not(.live){display:none}.summary{min-height:auto;display:block}.tabs{height:54px;border-bottom:1px solid var(--border)}.metric,.basis{display:none!important}.builder,.results,.detail{padding-left:12px;padding-right:12px}.instrument-tabs{grid-template-columns:repeat(3,1fr)}.leg>header{align-items:flex-start;flex-direction:column;padding:10px 12px}.expression{white-space:normal}.leg-fields{grid-template-columns:1fr 1fr}.meeting-row{grid-template-columns:70px minmax(90px,1fr) 56px}.tiles{margin-left:-12px;margin-right:-12px}.result strong{font-size:18px}.detail-heading,.detail footer{align-items:flex-start;flex-direction:column}}
+    @media(max-width:480px){.topbar{min-height:50px;height:auto;gap:8px;padding:8px 12px}.brand{font-size:14px}.status{flex:0 0 auto}.status .live{font-size:0}.status .live i{margin-right:0}.heading,.results-heading{flex-wrap:wrap}.actions,.view{width:100%}.actions{justify-content:flex-end}.chart-title{align-items:flex-start;flex-direction:column;gap:4px}.third small{display:none}}
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    (function(){
+      "use strict";
+      var CONTRACTS=[
+        ["Q26",2026,8,110],["U26",2026,9,138],["V26",2026,10,173],["X26",2026,11,201],["Z26",2026,12,229],["F27",2027,1,264],["H27",2027,3,320],["M27",2027,6,411],["U27",2027,9,502],["Z27",2027,12,593],["H28",2028,3,684],["M28",2028,6,782],["U28",2028,9,873],["Z28",2028,12,964],["H29",2029,3,1055],["M29",2029,6,1146],["U29",2029,9,1237],["Z29",2029,12,1328],["H30",2030,3,1419],["M30",2030,6,1510],["U30",2030,9,1601],["Z30",2030,12,1692],["H31",2031,3,1783],["M31",2031,6,1874],["U31",2031,9,1965],["Z31",2031,12,2056],["H32",2032,3,2147],["M32",2032,6,2238]
+      ];
+      var MEETINGS=["2026-07-23","2026-09-10","2026-10-29","2026-12-17","2027-02-04","2027-03-18","2027-04-29","2027-06-10","2027-07-22","2027-09-09","2027-10-28","2027-12-16","2028-01-20","2028-03-23","2028-05-04","2028-06-08","2028-07-20","2028-09-07","2028-10-12","2028-12-07","2029-01-18","2029-03-01","2029-04-12","2029-05-31","2029-07-12","2029-08-30","2029-10-11","2029-11-29"];
+      var TYPES=[
+        {id:"outright",label:"Outright"},{id:"spread1",label:"1M Spread"},{id:"spread3",label:"3M Spread"},{id:"spread6",label:"6M Spread"},{id:"fly",label:"Fly"},{id:"doubleFly",label:"Double Fly"}
+      ];
+      var WEIGHTS={outright:[1],spread1:[1,-1],spread3:[1,-1],spread6:[1,-1],fly:[1,-2,1],doubleFly:[1,-3,3,-1]};
+      var CODES=CONTRACTS.map(function(x){return x[0]});
+      var MONTH_INDEX={};var DTE={};
+      CONTRACTS.forEach(function(x){MONTH_INDEX[x[0]]=x[1]*12+x[2];DTE[x[0]]=x[3]});
+      var firstMeeting=Date.parse(MEETINGS[0]+"T00:00:00Z");
+      var offsets=MEETINGS.map(function(m){return (Date.parse(m+"T00:00:00Z")-firstMeeting)/86400000});
+      var impact={};
+      CODES.forEach(function(code){impact[code]=offsets.map(function(o){return 100*Math.min(1,Math.max(0,(DTE[code]-o)/90))})});
+      function combinations(items,size){
+        var output=[];
+        function walk(start,selected){
+          if(selected.length===size){output.push(selected.slice());return}
+          for(var i=start;i<=items.length-(size-selected.length);i+=1){selected.push(items[i]);walk(i+1,selected);selected.pop()}
+        }
+        walk(0,[]);return output
+      }
+      function buildTuples(type){
+        if(type==="outright")return CODES.map(function(c){return[c]});
+        if(type.indexOf("spread")===0){
+          var gap=Number(type.replace("spread",""));
+          return combinations(CODES,2).filter(function(t){return MONTH_INDEX[t[1]]-MONTH_INDEX[t[0]]===gap})
+        }
+        if(type==="fly")return combinations(CODES,3).filter(function(t){return MONTH_INDEX[t[1]]-MONTH_INDEX[t[0]]===MONTH_INDEX[t[2]]-MONTH_INDEX[t[1]]});
+        return combinations(CODES,4).filter(function(t){var a=MONTH_INDEX[t[1]]-MONTH_INDEX[t[0]],b=MONTH_INDEX[t[2]]-MONTH_INDEX[t[1]],c=MONTH_INDEX[t[3]]-MONTH_INDEX[t[2]];return a===b&&b===c})
+      }
+      var TUPLES={};TYPES.forEach(function(t){TUPLES[t.id]=buildTuples(t.id)});
+      var PREF={outright:["H27"],spread1:["U26","V26"],spread3:["U26","Z26"],spread6:["U26","H27"],fly:["Z26","H27","M27"],doubleFly:["Z26","H27","M27","U27"]};
+      function preferred(type){var p=PREF[type];return (TUPLES[type].filter(function(t){return t.every(function(v,i){return v===p[i]})})[0]||TUPLES[type][0]).slice()}
+      function initialLegs(){return[
+        {instrument:"spread3",contracts:preferred("spread3"),direction:1,ratio:1},
+        {instrument:"fly",contracts:preferred("fly"),direction:-1,ratio:2},
+        {instrument:"outright",contracts:preferred("outright"),direction:1,ratio:1}
+      ]}
+      var state={legCount:2,legs:initialLegs(),selectedMeeting:3,copied:false};
+      function meetingLabel(m){var d=new Date(m+"T00:00:00Z"),months=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEPT","OCT","NOV","DEC"];return String(d.getUTCDate()).padStart(2,"0")+" "+months[d.getUTCMonth()]+" "+String(d.getUTCFullYear()).slice(-2)}
+      function signed(v){if(Math.abs(v)<.05)return"0.0%";return(v>0?"+":"−")+Math.abs(v).toFixed(1)+"%"}
+      function ratioText(v){return Math.abs(v)%1===0?String(Math.abs(v)):Math.abs(v).toFixed(2)}
+      function body(leg){var c=leg.contracts;if(leg.instrument==="outright")return c[0];if(leg.instrument.indexOf("spread")===0)return c[0]+" − "+c[1];if(leg.instrument==="fly")return c[0]+" − 2"+c[1]+" + "+c[2];return c[0]+" − 3"+c[1]+" + 3"+c[2]+" − "+c[3]}
+      function expression(leg){var scale=leg.direction*leg.ratio;return(scale>=0?"+":"−")+ratioText(scale)+" × ("+body(leg)+")"}
+      function legImpact(leg){var w=WEIGHTS[leg.instrument],scale=leg.direction*leg.ratio;return MEETINGS.map(function(_,mi){return leg.contracts.reduce(function(sum,c,ci){return sum+w[ci]*impact[c][mi]*scale},0)})}
+      function options(leg,pos){var prefix=leg.contracts.slice(0,pos);var result=[];TUPLES[leg.instrument].forEach(function(t){var ok=prefix.every(function(c,i){return t[i]===c});if(ok&&result.indexOf(t[pos])<0)result.push(t[pos])});return result}
+      function metric(label,value,tone){return'<div class="metric"><span>'+label+'</span><strong class="'+(tone||"")+'">'+value+'</strong></div>'}
+      function resultTile(label,value,detail,tone){return'<div class="result"><span>'+label+'</span><strong class="'+(tone||"")+'">'+value+'</strong><small>'+detail+'</small></div>'}
+      function legCard(leg,index){
+        var tone="leg"+(index+1),html=[];
+        html.push('<article class="leg '+tone+'"><header><h2>LEG 0'+(index+1)+'</h2><div class="expression">EXPRESSION <strong>'+expression(leg)+'</strong></div></header>');
+        html.push('<div class="field-title">INSTRUMENT TYPE</div><div class="instrument-tabs">');
+        TYPES.forEach(function(t){html.push('<button data-action="instrument" data-leg="'+index+'" data-value="'+t.id+'" class="'+(leg.instrument===t.id?"selected":"")+'" aria-pressed="'+(leg.instrument===t.id)+'">'+t.label+'</button>')});
+        html.push('</div><div class="leg-fields">');
+        WEIGHTS[leg.instrument].forEach(function(_,pos){
+          html.push('<label><span>CONTRACT '+(pos+1)+'</span><select data-action="contract" data-leg="'+index+'" data-pos="'+pos+'">');
+          options(leg,pos).forEach(function(c){html.push('<option value="'+c+'" '+(c===leg.contracts[pos]?"selected":"")+'>'+c+'</option>')});
+          html.push('</select></label>')
+        });
+        html.push('<fieldset><legend>DIRECTION</legend><div class="direction"><button data-action="direction" data-leg="'+index+'" data-value="1" class="long '+(leg.direction===1?"selected":"")+'">＋ LONG</button><button data-action="direction" data-leg="'+index+'" data-value="-1" class="short '+(leg.direction===-1?"selected":"")+'">− SHORT</button></div></fieldset>');
+        html.push('<label class="ratio"><span>WEIGHT / RATIO</span><input data-action="ratio" data-leg="'+index+'" type="number" min="0" max="100" step=".25" value="'+leg.ratio+'"></label></div></article>');
+        return html.join("")
+      }
+      function render(){
+        var active=state.legs.slice(0,state.legCount),legValues=active.map(legImpact);
+        var combined=MEETINGS.map(function(_,mi){return legValues.reduce(function(sum,l){return sum+l[mi]},0)});
+        var gross=combined.reduce(function(s,v){return s+Math.abs(v)},0),net=combined.reduce(function(s,v){return s+v},0);
+        var max=Math.max.apply(null,combined),min=Math.min.apply(null,combined),maxMag=Math.max.apply(null,[1].concat(combined.map(Math.abs)));
+        var pos=combined.filter(function(v){return v>.05}).length,neg=combined.filter(function(v){return v<-.05}).length,selected=combined[state.selectedMeeting];
+        var html=[];
+        html.push('<main class="shell"><header class="topbar"><div class="brand">EURIBOR Meeting Impact Builder</div><div class="status" aria-label="Model status"><span class="live"><i></i> LIVE MODEL</span><span class="sep"></span><span>▣ &nbsp; AS OF 16 JUL 2026</span></div></header>');
+        html.push('<section class="summary"><nav class="tabs"><a class="active" href="#builder">SUMMARY</a><a href="#builder">STRUCTURE</a><a href="#impact-table">EXPOSURE</a><a href="#impact-table">RISK</a></nav>');
+        html.push(metric("NET EXPOSURE",signed(net),net>=0?"cyan":"amber")+metric("MAX",signed(max),"cyan")+metric("MIN",signed(min),"amber")+metric("GROSS",gross.toFixed(1)+"%")+metric("POS MEETINGS",pos+" / "+MEETINGS.length,"cyan")+metric("NEG MEETINGS",neg+" / "+MEETINGS.length,"amber")+'<div class="basis"><span>CURVE BASIS</span><strong>3M EURIBOR</strong></div></section>');
+        html.push('<section class="workspace" id="builder"><div class="builder"><div class="heading"><h1>STRUCTURE BUILDER</h1><div class="actions"><button class="plain" data-action="reset">↺ &nbsp; RESET</button><button class="copy" data-action="copy">▣ &nbsp; '+(state.copied?"COPIED":"COPY STRUCTURE")+'</button></div></div>');
+        html.push('<div class="leg-count" aria-label="Number of legs"><button data-action="legCount" data-value="2" class="'+(state.legCount===2?"selected":"")+'">2 Legs</button><button data-action="legCount" data-value="3" class="'+(state.legCount===3?"selected":"")+'">3 Legs</button></div><div class="leg-stack">');
+        active.forEach(function(l,i){html.push(legCard(l,i))});
+        if(state.legCount===2)html.push('<button class="third" data-action="legCount" data-value="3">＋ &nbsp; ADD THIRD LEG <small>— SWITCH TO 3 LEGS</small></button>');
+        html.push('</div></div><aside class="results"><div class="results-heading"><h2>COMBINED MEETING IMPACT ⓘ</h2><div class="view">VIEW BY: MEETING DATE &nbsp;⌄</div></div>');
+        html.push('<div class="net"><span>SELECTED MEETING EXPOSURE</span><strong class="mono '+(selected>=0?"positive":"negative")+'">'+signed(selected)+'</strong></div><div class="chart-title"><span>EXPOSURE BY ECB MEETING</span><span>(% OF ONE FULLY EXPOSED OUTRIGHT)</span></div><div class="meeting-chart" role="list">');
+        MEETINGS.forEach(function(m,i){var v=combined[i],width=Math.min(48,Math.abs(v)/maxMag*48),style=v>=0?"left:50%;width:"+width+"%":"right:50%;width:"+width+"%";html.push('<button class="meeting-row '+(state.selectedMeeting===i?"selected":"")+'" data-action="meeting" data-value="'+i+'" role="listitem" aria-label="'+meetingLabel(m)+' '+signed(v)+'"><span class="meeting-date">'+meetingLabel(m)+'</span><span class="bar-zone"><i class="zero"></i><i class="bar '+(v>=0?"pos":"neg")+'" style="'+style+'"></i></span><strong class="'+(v>=0?"positive":"negative")+'">'+signed(v)+'</strong></button>')});
+        html.push('</div><div class="axis"><span>−MAX</span><span>0%</span><span>+MAX</span></div><div class="contribution-title">LEG CONTRIBUTION — '+meetingLabel(MEETINGS[state.selectedMeeting])+'</div><div class="contributions">');
+        active.forEach(function(l,i){html.push('<div class="contribution leg'+(i+1)+'"><i></i><span>LEG 0'+(i+1)+'</span><code>'+expression(l)+'</code><strong class="'+(i===0?"cyan":i===1?"amber":"violet")+'">'+signed(legValues[i][state.selectedMeeting])+'</strong></div>')});
+        html.push('<div class="contribution total"><span>TOTAL</span><strong>'+signed(selected)+'</strong></div></div><div class="tiles">'+resultTile("MAX EXPOSURE",signed(max),meetingLabel(MEETINGS[combined.indexOf(max)]),"cyan")+resultTile("MIN EXPOSURE",signed(min),meetingLabel(MEETINGS[combined.indexOf(min)]),"amber")+resultTile("GROSS EXPOSURE",gross.toFixed(1)+"%","SUM OF ABSOLUTE VALUES")+'</div></aside></section>');
+        html.push('<section class="detail" id="impact-table"><div class="detail-heading"><div><span class="eyebrow">FULL HORIZON</span><h2>Meeting impact breakdown</h2></div><p>Raw signed sensitivity. Meeting impact is not the probability or expected size of an ECB decision.</p></div><div class="table-wrap"><table><thead><tr><th>ECB meeting</th><th>Combined impact</th>');
+        active.forEach(function(_,i){html.push('<th>LEG 0'+(i+1)+' contribution</th>')});html.push('<th>Absolute allocation</th></tr></thead><tbody>');
+        MEETINGS.forEach(function(m,mi){html.push('<tr data-action="meeting" data-value="'+mi+'" class="'+(state.selectedMeeting===mi?"selected":"")+'"><td>'+meetingLabel(m)+'</td><td class="'+(combined[mi]>=0?"positive":"negative")+'">'+signed(combined[mi])+'</td>');active.forEach(function(_,li){html.push('<td>'+signed(legValues[li][mi])+'</td>')});html.push('<td>'+(gross===0?"0.0%":(Math.abs(combined[mi])/gross*100).toFixed(1)+"%")+'</td></tr>')});
+        html.push('</tbody></table></div><footer><span>IMPACT RULE: 100 × MIN(1, MAX(0, DTE ÷ 90))</span><span>28 OUTRIGHTS · 28 ECB MEETINGS · JUL 2026—NOV 2029</span></footer></section></main>');
+        document.getElementById("app").innerHTML=html.join("")
+      }
+      document.getElementById("app").addEventListener("click",function(e){
+        var target=e.target.closest("[data-action]");if(!target)return;
+        var action=target.getAttribute("data-action"),leg=Number(target.getAttribute("data-leg")),value=target.getAttribute("data-value");
+        if(action==="legCount"){state.legCount=Number(value);render()}
+        else if(action==="instrument"){state.legs[leg].instrument=value;state.legs[leg].contracts=preferred(value);render()}
+        else if(action==="direction"){state.legs[leg].direction=Number(value);render()}
+        else if(action==="meeting"){state.selectedMeeting=Number(value);render()}
+        else if(action==="reset"){state={legCount:2,legs:initialLegs(),selectedMeeting:3,copied:false};render()}
+        else if(action==="copy"){var text=state.legs.slice(0,state.legCount).map(expression).join("  ");navigator.clipboard.writeText(text).then(function(){state.copied=true;render();setTimeout(function(){state.copied=false;render()},1200)})}
+      });
+      document.getElementById("app").addEventListener("change",function(e){
+        var target=e.target,action=target.getAttribute("data-action");if(!action)return;
+        var leg=Number(target.getAttribute("data-leg"));
+        if(action==="ratio"){state.legs[leg].ratio=Math.max(0,Number(target.value)||0);render()}
+        if(action==="contract"){
+          var pos=Number(target.getAttribute("data-pos")),item=state.legs[leg],next=item.contracts.slice();next[pos]=target.value;
+          for(var p=pos+1;p<WEIGHTS[item.instrument].length;p+=1){var compatible=TUPLES[item.instrument].filter(function(t){return t.slice(0,p).every(function(v,i){return v===next[i]})});next[p]=compatible[0][p]}
+          item.contracts=next;render()
+        }
+      });
+      render();
+    })();
+  </script>
+</body>
+</html>
