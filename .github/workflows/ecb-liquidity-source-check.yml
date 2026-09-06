@@ -1,0 +1,63 @@
+name: ECB liquidity source verification
+on:
+  push:
+    branches: [ecb-liquidity-dashboard-20260906]
+    paths: [.github/workflows/ecb-liquidity-source-check.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Retrieve official ECB sources
+        run: |
+          python - <<'PY'
+          from concurrent.futures import ThreadPoolExecutor
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          import hashlib, io, json, time, zipfile
+          out = Path('ecb-sources')
+          out.mkdir()
+          sources = {f'liq_daily_{y}.zip': f'https://www.ecb.europa.eu/stats/pdf/monetary/lm/liq_daily_{y}.zip' for y in range(2021, datetime.now(timezone.utc).year + 1)}
+          sources['ilm_recent.csv'] = 'https://data-api.ecb.europa.eu/service/data/ILM/D.U2.C.EXLIQ+L020100+L020200+MRR+A050500.U2.EUR?startPeriod=2024-09-27&format=csvdata'
+          sources['latest_page.html'] = 'https://www.ecb.europa.eu/mopo/liq/html/index.en.html'
+          def fetch(item):
+              name, url = item
+              record = {'name': name, 'url': url, 'retrieved_at': datetime.now(timezone.utc).isoformat()}
+              for attempt in range(2):
+                  try:
+                      with urlopen(Request(url, headers={'User-Agent': 'LOIS-Liquidity-Monitor/1.0', 'Accept': '*/*'}), timeout=20) as r:
+                          body = r.read(12000001)
+                          if len(body) > 12000000: raise ValueError('Response exceeds limit')
+                          record.update(status=r.status, bytes=len(body), sha256=hashlib.sha256(body).hexdigest(), last_modified=r.headers.get('Last-Modified'))
+                          if name.endswith('.zip'):
+                              with zipfile.ZipFile(io.BytesIO(body)) as z:
+                                  if sum(i.file_size for i in z.infolist()) > 40000000: raise ValueError('Archive expansion limit')
+                                  record['files'] = [{'name': i.filename, 'bytes': i.file_size, 'header': z.read(i).decode('utf-8-sig', errors='replace').splitlines()[:12]} for i in z.infolist() if i.filename.lower().endswith(('.csv', '.txt'))][:4]
+                          (out / name).write_bytes(body)
+                          record.pop('error', None)
+                          print(json.dumps(record), flush=True)
+                          return record
+                  except Exception as e:
+                      record['error'] = str(e)
+                      time.sleep(1)
+              print(json.dumps(record), flush=True)
+              return record
+          with ThreadPoolExecutor(max_workers=4) as pool:
+              result = list(pool.map(fetch, sources.items()))
+          (out / 'manifest.json').write_text(json.dumps(result, indent=2))
+          PY
+      - name: Preserve official source bytes and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecb-liquidity-official-sources
+          path: ecb-sources/
+          retention-days: 14
+          if-no-files-found: error
