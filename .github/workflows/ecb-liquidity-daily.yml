@@ -1,0 +1,53 @@
+name: ECB liquidity daily updates
+on:
+  schedule:
+    - cron: '40 9,12 * * 1-5'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/ecb-liquidity-daily.yml]
+permissions:
+  contents: write
+concurrency:
+  group: ecb-liquidity-dataset
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check out isolated liquidity branch
+        uses: actions/checkout@v4
+        with:
+          ref: ecb-liquidity-dashboard-20260906
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download and validate official ECB data
+        id: collect
+        continue-on-error: true
+        run: python ecb-liquidity/refresh.py
+      - name: Persist dataset and visible refresh diagnostics
+        if: always()
+        run: |
+          if [ -f ecb-liquidity/data/liquidity.json ]; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add ecb-liquidity/data/
+            if ! git diff --cached --quiet; then
+              git commit -m "Update official ECB excess liquidity $(date -u +%F)"
+              git push origin HEAD:ecb-liquidity-dashboard-20260906
+            fi
+          fi
+      - name: Preserve downloadable snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecb-liquidity-dataset
+          path: ecb-liquidity/data/
+          retention-days: 14
+          if-no-files-found: error
+      - name: Report collection failure without hiding cached data
+        if: steps.collect.outcome == 'failure'
+        run: exit 1
