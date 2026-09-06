@@ -1,0 +1,81 @@
+name: Publish verified liquidity dashboard
+on:
+  push:
+    branches: [ecb-liquidity-dashboard-20260906]
+    paths: [.github/workflows/ecb-liquidity-publish.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ecb-liquidity-publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ecb-liquidity-dashboard-20260906
+      - name: Build and validate unchanged history
+        run: |
+          node - <<'JS'
+          const fs=require('node:fs'),zlib=require('node:zlib'),crypto=require('node:crypto');
+          const base='ecb-liquidity/';
+          const parts=[1,2,3].map(i=>fs.readFileSync(base+'web-v2.br.'+i+'.txt','utf8').trim());
+          const template=zlib.brotliDecompressSync(Buffer.from(parts.join(''),'base64')).toString('utf8');
+          const hash=crypto.createHash('sha256').update(template).digest('hex');
+          if(hash!=='c34d8221a2d6894b20549b4de0c04bc8303bca14ba3f229fdc4ca0b1e134bcd3')throw Error('Template SHA mismatch: '+hash);
+          const data=JSON.parse(fs.readFileSync(base+'data/liquidity.json','utf8'));
+          if(data.schema_version!==1||data.unit!=='EUR millions'||data.records.length<1400)throw Error('Dataset validation failed');
+          const json=JSON.stringify(data).replace(/</g,'\\u003c');
+          const html=template.replace('__ECB_DATA__',json);
+          if(!html.includes('Math.pow(m,.42)'))throw Error('Colour patch missing');
+          fs.writeFileSync(base+'index.html',html);
+          console.log(JSON.stringify({template_sha256:hash,records:data.records.length,html_bytes:Buffer.byteLength(html),colour_patch:true}));
+          JS
+      - name: Store standalone public dashboard on isolated branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ecb-liquidity/index.html
+          git diff --cached --quiet || git commit -m 'Publish liquidity dashboard with high-contrast monthly heatmap'
+          git push origin HEAD:ecb-liquidity-dashboard-20260906
+          echo "PUBLISHED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Verify public website endpoints
+        run: |
+          python - <<'PY'
+          from urllib.request import Request, urlopen
+          from pathlib import Path
+          from datetime import datetime, timezone
+          import json,re,os,time
+          out=Path('web-publication');out.mkdir()
+          sha=os.environ['PUBLISHED_SHA']
+          urls=['https://lois-ecb-liquidity.vercel.app','https://rawcdn.githack.com/codenuker/ESTR-3mo/'+sha+'/ecb-liquidity/index.html']
+          results=[]
+          for n,url in enumerate(urls):
+              result={'url':url,'checked_at':datetime.now(timezone.utc).isoformat(),'commit':sha}
+              for attempt in range(3):
+                  try:
+                      with urlopen(Request(url,headers={'User-Agent':'LOIS-Dashboard-Verification/2.0'}),timeout=20) as r:
+                          body=r.read(3000000).decode('utf-8');result.update(status=r.status,final_url=r.url,content_type=r.headers.get('Content-Type'))
+                      (out/f'page-{n}.html').write_text(body)
+                      m=re.search(r'<script id="embedded-data" type="application/json">(.*?)</script>',body,re.S)
+                      result.update(bytes=len(body),colour_patch='Math.pow(m,.42)' in body,records=len(json.loads(m.group(1))['records']) if m else 0,has_dashboard='MONTHLY LIQUIDITY HEATMAP' in body,title=re.findall(r'<title>(.*?)</title>',body))
+                      result['passed']=result['status']==200 and result['colour_patch'] and result['records']>=1400 and result['has_dashboard']
+                      if result['passed']:break
+                      time.sleep(5)
+                  except Exception as e:
+                      result.update(error=str(e),passed=False);time.sleep(5)
+              print(json.dumps(result),flush=True);results.append(result)
+          (out/'results.json').write_text(json.dumps(results,indent=2))
+          if not any(r.get('passed') for r in results):raise SystemExit('Public website verification has not passed')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: liquidity-dashboard-publication
+          path: |
+            web-publication/
+            ecb-liquidity/index.html
+          retention-days: 14
