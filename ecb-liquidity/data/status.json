@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "unit": "EUR millions",
-  "last_check": "2026-09-11T11:37:50+00:00",
-  "last_success": "2026-09-11T11:37:50+00:00",
+  "last_check": "2026-09-11T11:51:20+00:00",
+  "last_success": "2026-09-11T11:51:20+00:00",
   "history_complete": true,
   "status": "partial",
   "warnings": [
@@ -16,10 +16,11 @@
   "revised_rows": 0,
   "analytics_basis": "Published Monday-Friday observations by default; all published dates retained in raw data",
   "collector": "GitHub Actions / official ECB sources",
-  "schedule_utc": "40 9,12 * * 1-5",
+  "schedule_utc": "13,43 8-17 * * 1-5; 13 6,20 * * 1-5",
   "offline_import": false,
   "first_date": "2021-01-01",
   "last_date": "2026-09-10",
   "all_observations": 1723,
-  "latest_millions": 2137073.0
+  "latest_millions": 2137073.0,
+  "schedule_note": "Weekdays: 08:13-17:43 UTC every 30 minutes; extra checks at 06:13 and 20:13 UTC. Scheduled runs may be delayed."
 }
