@@ -1,0 +1,9 @@
+
+# Python / Streamlit local files
+.venv/
+__pycache__/
+*.pyc
+
+# Generated dashboard outputs
+er3_dashboard_package/outputs/
+er3_dashboard_package/er3_dashboard_package.zip
