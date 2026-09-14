@@ -10,12 +10,32 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Ask EXLIQ AI
+      - name: Inspect live EXLIQ AI build
         run: |
-          curl -sS --max-time 120 -o /tmp/exliq.json -w 'HTTP_STATUS=%{http_code}\n' -X POST https://lois-ecb-liquidity.vercel.app/api/chat -H 'Content-Type: application/json' -d '{"question":"Give the latest excess liquidity date and level."}'
-          cat /tmp/exliq.json
           python - <<'PY'
-          import json
-          data=json.load(open('/tmp/exliq.json'))
-          print('ERROR=', data.get('error'))
+          import json, urllib.request
+          base='https://lois-ecb-liquidity.vercel.app'
+          def get(path):
+              req=urllib.request.Request(base+path,headers={'User-Agent':'EXLIQ-live-check/1.0','Cache-Control':'no-cache'})
+              with urllib.request.urlopen(req,timeout=90) as r:
+                  return r.status,r.read().decode('utf-8','replace')
+          s,html=get('/')
+          print('PAGE_STATUS',s)
+          for needle in ['id="exliq-fab"','function bindExliqAI()','bindExliqAI();','window.LOIS=']:
+              print(needle, html.find(needle))
+          try:
+              s2,info=get('/build-info.json?t=1')
+              print('BUILD_INFO_STATUS',s2)
+              print('BUILD_INFO',info[:1000])
+          except Exception as e:
+              print('BUILD_INFO_ERROR',repr(e))
+          chat=html.find('id="exliq-fab"')
+          init=html.find('window.LOIS=')
+          bindcall=html.find('bindExliqAI();')
+          print('ORDER_OK', chat>=0 and init>=0 and chat<init)
+          print('BIND_PRESENT', bindcall>=0)
+          assert s==200
+          assert chat>=0
+          assert bindcall>=0
+          assert chat<init
           PY
