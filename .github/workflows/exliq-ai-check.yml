@@ -1,5 +1,9 @@
 name: EXLIQ AI check
-on: workflow_dispatch
+on:
+  push:
+    branches: [ecb-liquidity-dashboard-20260906]
+    paths: [.github/workflows/exliq-ai-check.yml]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
