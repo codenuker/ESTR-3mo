@@ -1,0 +1,67 @@
+name: Verify ECB force refresh
+on:
+  push:
+    branches: [ecb-liquidity-dashboard-20260906]
+    paths: [.github/workflows/ecb-force-api-verify.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check public dashboard and direct ECB command
+        run: |
+          python - <<'PY'
+          import json, re, struct, zlib
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError
+          from datetime import datetime, timezone
+          out=Path('verification');out.mkdir()
+          base='https://lois-ecb-liquidity.vercel.app'
+          report={'checked_at':datetime.now(timezone.utc).isoformat(),'base':base}
+          for name,route,post in [('page','/',False),('api','/api/liquidity',False),('force','/api/force-restart',True),('icon','/icon-32.png?v=20260914',False)]:
+              item={}
+              try:
+                  headers={'User-Agent':'ECB-Dashboard-Verification/4.1'}
+                  if post:headers.update({'Content-Type':'application/json','Origin':base})
+                  req=Request(base+route,data=b'{}' if post else None,headers=headers,method='POST' if post else 'GET')
+                  with urlopen(req,timeout=70) as r:
+                      body=r.read(5000000);item.update(status=r.status,final_url=r.url,content_type=r.headers.get('Content-Type'))
+                  (out/(name+('.png' if name=='icon' else '.txt'))).write_bytes(body)
+                  if name=='page':
+                      text=body.decode();item.update(title=re.findall(r'<title>(.*?)</title>',text),button='id="force-restart"' in text,api_command="'/api/force-restart'" in text)
+                  elif name=='icon':
+                      assert body[:8]==b'\x89PNG\r\n\x1a\n'
+                      pos=8; chunks=[]
+                      while pos<len(body):
+                          size=struct.unpack('>I',body[pos:pos+4])[0];kind=body[pos+4:pos+8];data=body[pos+8:pos+8+size]
+                          crc=struct.unpack('>I',body[pos+8+size:pos+12+size])[0]
+                          assert zlib.crc32(kind+data)&0xffffffff==crc,'PNG checksum failed'
+                          if kind==b'IDAT':chunks.append(data)
+                          pos+=12+size
+                      zlib.decompress(b''.join(chunks));item['valid_png']=True
+                  else:
+                      data=json.loads(body);item.update(latest=data.get('last_date'),value=data.get('latest_millions'),refresh=data.get('refresh'),records=len(data.get('records',[])))
+              except HTTPError as e:
+                  item.update(status=e.code,error=str(e));(out/(name+'-error.txt')).write_bytes(e.read())
+              except Exception as e:item['error']=str(e)
+              report[name]=item;print(name,json.dumps(item),flush=True)
+          (out/'report.json').write_text(json.dumps(report,indent=2))
+          assert report['page'].get('title')==['ECB Excess Liquidity']
+          assert report['page'].get('button')
+          assert report['force'].get('refresh',{}).get('success') is True
+          assert report['force'].get('refresh',{}).get('cached') is False
+          assert report['icon'].get('valid_png') is True
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ecb-force-api-verification
+          path: verification/
+          retention-days: 14
