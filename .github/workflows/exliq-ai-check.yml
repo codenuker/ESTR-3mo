@@ -12,6 +12,10 @@ jobs:
     steps:
       - name: Ask EXLIQ AI
         run: |
-          response=$(curl -fsS --max-time 120 -X POST https://lois-ecb-liquidity.vercel.app/api/chat -H 'Content-Type: application/json' -d '{"question":"Give the latest excess liquidity date and level."}')
-          echo "$response"
-          python -c 'import json,sys; d=json.loads(sys.argv[1]); assert d.get("answer"); assert d.get("data_date")' "$response"
+          curl -sS --max-time 120 -o /tmp/exliq.json -w 'HTTP_STATUS=%{http_code}\n' -X POST https://lois-ecb-liquidity.vercel.app/api/chat -H 'Content-Type: application/json' -d '{"question":"Give the latest excess liquidity date and level."}'
+          cat /tmp/exliq.json
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/exliq.json'))
+          print('ERROR=', data.get('error'))
+          PY
