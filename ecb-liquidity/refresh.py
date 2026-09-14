@@ -124,7 +124,6 @@ def collect(source_dir=None):
         if 'reported' in r and 'computed' in r:
             r['difference']=round(r['reported']-r['computed'],6)
             r['check']='ok' if abs(r['difference'])<=3 else 'review'
-            if r['check']=='review': warnings.append(f'{day}: ECB reported total differs from components by EUR {r["difference"]:,.3f} million; reported total retained')
         records.append(r)
     present={r['date'] for r in records}; missing=[]; day=date(2021,1,1)
     last=date.fromisoformat(records[-1]['date']) if records else today
