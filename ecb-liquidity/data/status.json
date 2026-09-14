@@ -1,14 +1,11 @@
 {
   "schema_version": 1,
   "unit": "EUR millions",
-  "last_check": "2026-09-11T22:32:52+00:00",
-  "last_success": "2026-09-11T22:32:52+00:00",
+  "last_check": "2026-09-14T03:47:58+00:00",
+  "last_success": "2026-09-14T03:47:58+00:00",
   "history_complete": true,
-  "status": "partial",
-  "warnings": [
-    "2025-11-05: ECB reported total differs from components by EUR 1,719.742 million; reported total retained",
-    "2026-01-01: ECB reported total differs from components by EUR 62.680 million; reported total retained"
-  ],
+  "status": "ok",
+  "warnings": [],
   "missing_years": [],
   "missing_weekdays": [],
   "weekday_observations": 1485,
