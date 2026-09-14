@@ -1,4 +1,4 @@
-name: Verify ECB force refresh
+name: Verify ECB analytics dashboard
 on:
   push:
     branches: [ecb-liquidity-dashboard-20260906]
@@ -9,59 +9,56 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Check public dashboard and direct ECB command
+      - name: Verify public UI and ECB API refresh
         run: |
           python - <<'PY'
-          import json, re, struct, zlib
+          import json, re, time
           from pathlib import Path
           from urllib.request import Request, urlopen
           from urllib.error import HTTPError
           from datetime import datetime, timezone
-          out=Path('verification');out.mkdir()
+          out=Path('verification'); out.mkdir(exist_ok=True)
           base='https://lois-ecb-liquidity.vercel.app'
+          time.sleep(15)
           report={'checked_at':datetime.now(timezone.utc).isoformat(),'base':base}
-          for name,route,post in [('page','/',False),('api','/api/liquidity',False),('force','/api/force-restart',True),('icon','/icon-32.png?v=20260914',False)]:
-              item={}
-              try:
-                  headers={'User-Agent':'ECB-Dashboard-Verification/4.1'}
-                  if post:headers.update({'Content-Type':'application/json','Origin':base})
-                  req=Request(base+route,data=b'{}' if post else None,headers=headers,method='POST' if post else 'GET')
-                  with urlopen(req,timeout=70) as r:
-                      body=r.read(5000000);item.update(status=r.status,final_url=r.url,content_type=r.headers.get('Content-Type'))
-                  (out/(name+('.png' if name=='icon' else '.txt'))).write_bytes(body)
-                  if name=='page':
-                      text=body.decode();item.update(title=re.findall(r'<title>(.*?)</title>',text),button='id="force-restart"' in text,api_command="'/api/force-restart'" in text)
-                  elif name=='icon':
-                      assert body[:8]==b'\x89PNG\r\n\x1a\n'
-                      pos=8; chunks=[]
-                      while pos<len(body):
-                          size=struct.unpack('>I',body[pos:pos+4])[0];kind=body[pos+4:pos+8];data=body[pos+8:pos+8+size]
-                          crc=struct.unpack('>I',body[pos+8+size:pos+12+size])[0]
-                          assert zlib.crc32(kind+data)&0xffffffff==crc,'PNG checksum failed'
-                          if kind==b'IDAT':chunks.append(data)
-                          pos+=12+size
-                      zlib.decompress(b''.join(chunks));item['valid_png']=True
-                  else:
-                      data=json.loads(body);item.update(latest=data.get('last_date'),value=data.get('latest_millions'),refresh=data.get('refresh'),records=len(data.get('records',[])))
-              except HTTPError as e:
-                  item.update(status=e.code,error=str(e));(out/(name+'-error.txt')).write_bytes(e.read())
-              except Exception as e:item['error']=str(e)
-              report[name]=item;print(name,json.dumps(item),flush=True)
+          def get(route, post=False):
+              headers={'User-Agent':'ECB-Dashboard-Verification/5.0'}
+              if post: headers.update({'Content-Type':'application/json','Origin':base})
+              req=Request(base+route,data=b'{}' if post else None,headers=headers,method='POST' if post else 'GET')
+              with urlopen(req,timeout=75) as r: return r.status,r.headers,r.read(6000000)
+          status,headers,body=get('/')
+          text=body.decode('utf-8')
+          report['page']={'status':status,'title':re.findall(r'<title>(.*?)</title>',text),'analysis_tab':'DATA ANALYSIS' in text,'old_method_tab':'data-tab="sources"' in text,'heat_change_default':'<option value="change" selected>Month-end change</option>' in text,'force_button':'id="force-restart"' in text,'forecast_models':all(x in text for x in ['Linear trend','AR(1)','AR(3)','Ridge AR(5)']),'csv_upload':'id="upload-file"' in text}
+          (out/'page.html').write_bytes(body)
+          status,headers,body=get('/api/liquidity')
+          api=json.loads(body); report['api']={'status':status,'latest':api.get('last_date'),'value':api.get('latest_millions'),'success':api.get('refresh',{}).get('success')}
+          (out/'api.json').write_bytes(body)
+          status,headers,body=get('/api/force-restart',True)
+          force=json.loads(body); report['force']={'status':status,'latest':force.get('last_date'),'success':force.get('refresh',{}).get('success'),'cached':force.get('refresh',{}).get('cached')}
+          (out/'force.json').write_bytes(body)
+          status,headers,body=get('/icon.svg?v=5')
+          icon=body.decode('utf-8'); report['icon']={'status':status,'content_type':headers.get('Content-Type'),'valid_svg':icon.lstrip().startswith('<svg') and '</svg>' in icon}
+          (out/'icon.svg').write_text(icon)
           (out/'report.json').write_text(json.dumps(report,indent=2))
-          assert report['page'].get('title')==['ECB Excess Liquidity']
-          assert report['page'].get('button')
-          assert report['force'].get('refresh',{}).get('success') is True
-          assert report['force'].get('refresh',{}).get('cached') is False
-          assert report['icon'].get('valid_png') is True
+          print(json.dumps(report,indent=2))
+          p=report['page']
+          assert p['status']==200
+          assert p['title']==['ECB Excess Liquidity']
+          assert p['analysis_tab'] and not p['old_method_tab']
+          assert p['heat_change_default'] and p['force_button']
+          assert p['forecast_models'] and p['csv_upload']
+          assert report['api']['status']==200 and report['api']['success'] is True
+          assert report['force']['status']==200 and report['force']['success'] is True and report['force']['cached'] is False
+          assert report['icon']['status']==200 and report['icon']['valid_svg'] is True
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ecb-force-api-verification
+          name: ecb-v5-verification
           path: verification/
           retention-days: 14
