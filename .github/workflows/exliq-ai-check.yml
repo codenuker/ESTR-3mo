@@ -1,0 +1,13 @@
+name: EXLIQ AI check
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask EXLIQ AI
+        run: |
+          response=$(curl -fsS --max-time 120 -X POST https://lois-ecb-liquidity.vercel.app/api/chat -H 'Content-Type: application/json' -d '{"question":"Give the latest excess liquidity date and level."}')
+          echo "$response"
+          python -c 'import json,sys; d=json.loads(sys.argv[1]); assert d.get("answer"); assert d.get("data_date")' "$response"
