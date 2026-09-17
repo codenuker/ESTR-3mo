@@ -25,31 +25,67 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+
           p=Path('ecb-liquidity/index.html')
           s=p.read_text(encoding='utf-8')
           original=s
+
+          # Keep the freshness fix already used by the live dashboard.
           old_cloud="if((next.last_check||'')>=(data.last_check||'')){"
           new_cloud="if(isNewerDataset(next,data)){"
           if old_cloud in s: s=s.replace(old_cloud,new_cloud,1)
           elif new_cloud not in s: raise SystemExit('cloud freshness expression not found')
+
           old_cache="if(cached?.schema_version===1&&cached.unit==='EUR millions'&&cached?.records?.length&&(cached.last_check||'')>(EMBED.last_check||''))data={...EMBED,...cached};"
           new_cache="if(cached?.schema_version===1&&cached.unit==='EUR millions'&&cached?.records?.length&&isNewerDataset(cached,EMBED))data={...EMBED,...cached};"
           if old_cache in s: s=s.replace(old_cache,new_cache,1)
           elif new_cache not in s: raise SystemExit('cache freshness expression not found')
+
           helper="function latestObsDate(d){const r=Array.isArray(d?.records)&&d.records.length?d.records[d.records.length-1]:null;return r?.date||''}\nfunction isNewerDataset(next,current){const nd=latestObsDate(next),cd=latestObsDate(current);if(nd!==cd)return nd>cd;return(next?.last_check||'')>=(current?.last_check||'')}\n"
           if 'function isNewerDataset(' not in s:
               marker='async function loadCloud(){'
               if marker not in s: raise SystemExit('loadCloud marker not found')
               s=s.replace(marker,helper+marker,1)
-          tags='<script defer src="browser-notifications.js?v=20260917b"></script><script defer src="delta-tooltips.js?v=20260917"></script>'
+
+          # Keep the working hover and browser-alert enhancements.
+          hover_tags='<script defer src="browser-notifications.js?v=20260917b"></script><script defer src="delta-tooltips.js?v=20260917"></script>'
           if 'src="browser-notifications.js' not in s:
-              s=s.replace('</head>',tags+'</head>',1)
+              s=s.replace('</head>',hover_tags+'</head>',1)
+
+          # Restore the real Data Analysis dashboard as the fourth tab.
+          analysis_tag='<script defer src="data-analysis.js?v=20260917c"></script>'
+          if 'src="data-analysis.js' not in s:
+              s=s.replace('</head>',analysis_tag+'</head>',1)
+
+          tab_pattern=re.compile(r'(<button\b[^>]*\bdata-tab=["\']method["\'][^>]*>)(.*?)(</button>)',re.I|re.S)
+          if tab_pattern.search(s):
+              s=tab_pattern.sub(lambda m:m.group(1)+'<span class="key">4</span>Data Analysis'+m.group(3),s,count=1)
+          else:
+              raise SystemExit('method tab not found')
+
+          # Month-end change must be the default heatmap view, not monthly average.
+          sel_pattern=re.compile(r'(<select\b[^>]*\bid=["\']heatmetric["\'][^>]*>)(.*?)(</select>)',re.I|re.S)
+          m=sel_pattern.search(s)
+          if not m:
+              raise SystemExit('heatmetric selector not found')
+          body=m.group(2)
+          body=re.sub(r'\sselected(?:=["\'][^"\']*["\'])?','',body,flags=re.I)
+          body2,n=re.subn(r'(<option\b[^>]*\bvalue=["\']change["\'][^>]*)(>)',r'\1 selected\2',body,count=1,flags=re.I)
+          if n!=1:
+              raise SystemExit('month-end change option not found')
+          s=s[:m.start()]+m.group(1)+body2+m.group(3)+s[m.end():]
+
           p.write_text(s,encoding='utf-8')
+
           assert 'function isNewerDataset(' in s
           assert 'if(isNewerDataset(next,data)){' in s
           assert 'isNewerDataset(cached,EMBED)' in s
           assert 'browser-notifications.js?v=20260917b' in s
           assert 'delta-tooltips.js?v=20260917' in s
+          assert 'data-analysis.js?v=20260917c' in s
+          assert 'Data Analysis' in s
+          assert re.search(r'<option\b[^>]*\bvalue=["\']change["\'][^>]*\bselected\b',s,re.I)
           print('patched' if s!=original else 'already patched')
           PY
 
@@ -63,5 +99,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add ecb-liquidity/index.html
-          git commit -m 'Fix stale dataset selection and enable chart hover alerts'
+          git commit -m 'Restore Data Analysis and month-end change default'
           git push origin HEAD:ecb-liquidity-dashboard-20260906
