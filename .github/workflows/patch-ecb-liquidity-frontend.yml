@@ -1,0 +1,84 @@
+name: Patch ECB liquidity frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-ecb-liquidity-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout liquidity branch
+        uses: actions/checkout@v4
+        with:
+          ref: ecb-liquidity-dashboard-20260906
+          fetch-depth: 0
+
+      - name: Patch frontend
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('ecb-liquidity/index.html')
+          s = p.read_text(encoding='utf-8')
+          original = s
+
+          old_cache = "if(cached&&cached.schema_version===1&&(cached.last_check||'')>(data.last_check||''))data=cached;"
+          new_cache = "if(cached&&cached.schema_version===1&&isNewerDataset(cached,data))data=cached;"
+          if old_cache in s:
+              s = s.replace(old_cache, new_cache, 1)
+          elif new_cache not in s:
+              raise SystemExit('Expected cache freshness expression not found')
+
+          old_cloud = "if((next.last_check||'')>=(data.last_check||'')){"
+          new_cloud = "if(isNewerDataset(next,data)){"
+          if old_cloud in s:
+              s = s.replace(old_cloud, new_cloud, 1)
+          elif new_cloud not in s:
+              raise SystemExit('Expected cloud freshness expression not found')
+
+          helper = """function latestObsDate(d){const r=Array.isArray(d?.records)&&d.records.length?d.records[d.records.length-1]:null;return r?.date||''}\nfunction isNewerDataset(next,current){const nd=latestObsDate(next),cd=latestObsDate(current);if(nd!==cd)return nd>cd;return(next?.last_check||'')>=(current?.last_check||'')}\n"""
+          if 'function isNewerDataset(' not in s:
+              marker = 'async function loadCloud(){'
+              if marker not in s:
+                  raise SystemExit('loadCloud marker not found')
+              s = s.replace(marker, helper + marker, 1)
+
+          tags = '<script defer src="browser-notifications.js?v=20260917b"></script><script defer src="delta-tooltips.js?v=20260917"></script>'
+          if 'src="browser-notifications.js' not in s:
+              if '</head>' not in s:
+                  raise SystemExit('head close marker not found')
+              s = s.replace('</head>', tags + '</head>', 1)
+
+          if s == original:
+              print('Frontend already patched')
+          else:
+              p.write_text(s, encoding='utf-8')
+              print('Frontend patched')
+
+          assert 'function isNewerDataset(' in s
+          assert 'if(isNewerDataset(next,data)){' in s
+          assert 'if(cached&&cached.schema_version===1&&isNewerDataset(cached,data))data=cached;' in s
+          assert 'src="browser-notifications.js?v=20260917b"' in s
+          assert 'src="delta-tooltips.js?v=20260917"' in s
+          PY
+
+      - name: Commit frontend patch
+        shell: bash
+        run: |
+          if git diff --quiet -- ecb-liquidity/index.html; then
+            echo 'No changes to commit'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ecb-liquidity/index.html
+          git commit -m 'Fix stale dataset selection and enable chart hover alerts'
+          git push origin HEAD:ecb-liquidity-dashboard-20260906
