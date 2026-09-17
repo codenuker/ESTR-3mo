@@ -25,49 +25,32 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-
-          p = Path('ecb-liquidity/index.html')
-          s = p.read_text(encoding='utf-8')
-          original = s
-
-          old_cache = "if(cached&&cached.schema_version===1&&(cached.last_check||'')>(data.last_check||''))data=cached;"
-          new_cache = "if(cached&&cached.schema_version===1&&isNewerDataset(cached,data))data=cached;"
-          if old_cache in s:
-              s = s.replace(old_cache, new_cache, 1)
-          elif new_cache not in s:
-              raise SystemExit('Expected cache freshness expression not found')
-
-          old_cloud = "if((next.last_check||'')>=(data.last_check||'')){"
-          new_cloud = "if(isNewerDataset(next,data)){"
-          if old_cloud in s:
-              s = s.replace(old_cloud, new_cloud, 1)
-          elif new_cloud not in s:
-              raise SystemExit('Expected cloud freshness expression not found')
-
-          helper = """function latestObsDate(d){const r=Array.isArray(d?.records)&&d.records.length?d.records[d.records.length-1]:null;return r?.date||''}\nfunction isNewerDataset(next,current){const nd=latestObsDate(next),cd=latestObsDate(current);if(nd!==cd)return nd>cd;return(next?.last_check||'')>=(current?.last_check||'')}\n"""
+          p=Path('ecb-liquidity/index.html')
+          s=p.read_text(encoding='utf-8')
+          original=s
+          old_cloud="if((next.last_check||'')>=(data.last_check||'')){"
+          new_cloud="if(isNewerDataset(next,data)){"
+          if old_cloud in s: s=s.replace(old_cloud,new_cloud,1)
+          elif new_cloud not in s: raise SystemExit('cloud freshness expression not found')
+          old_cache="if(cached?.schema_version===1&&cached.unit==='EUR millions'&&cached?.records?.length&&(cached.last_check||'')>(EMBED.last_check||''))data={...EMBED,...cached};"
+          new_cache="if(cached?.schema_version===1&&cached.unit==='EUR millions'&&cached?.records?.length&&isNewerDataset(cached,EMBED))data={...EMBED,...cached};"
+          if old_cache in s: s=s.replace(old_cache,new_cache,1)
+          elif new_cache not in s: raise SystemExit('cache freshness expression not found')
+          helper="function latestObsDate(d){const r=Array.isArray(d?.records)&&d.records.length?d.records[d.records.length-1]:null;return r?.date||''}\nfunction isNewerDataset(next,current){const nd=latestObsDate(next),cd=latestObsDate(current);if(nd!==cd)return nd>cd;return(next?.last_check||'')>=(current?.last_check||'')}\n"
           if 'function isNewerDataset(' not in s:
-              marker = 'async function loadCloud(){'
-              if marker not in s:
-                  raise SystemExit('loadCloud marker not found')
-              s = s.replace(marker, helper + marker, 1)
-
-          tags = '<script defer src="browser-notifications.js?v=20260917b"></script><script defer src="delta-tooltips.js?v=20260917"></script>'
+              marker='async function loadCloud(){'
+              if marker not in s: raise SystemExit('loadCloud marker not found')
+              s=s.replace(marker,helper+marker,1)
+          tags='<script defer src="browser-notifications.js?v=20260917b"></script><script defer src="delta-tooltips.js?v=20260917"></script>'
           if 'src="browser-notifications.js' not in s:
-              if '</head>' not in s:
-                  raise SystemExit('head close marker not found')
-              s = s.replace('</head>', tags + '</head>', 1)
-
-          if s == original:
-              print('Frontend already patched')
-          else:
-              p.write_text(s, encoding='utf-8')
-              print('Frontend patched')
-
+              s=s.replace('</head>',tags+'</head>',1)
+          p.write_text(s,encoding='utf-8')
           assert 'function isNewerDataset(' in s
           assert 'if(isNewerDataset(next,data)){' in s
-          assert 'if(cached&&cached.schema_version===1&&isNewerDataset(cached,data))data=cached;' in s
-          assert 'src="browser-notifications.js?v=20260917b"' in s
-          assert 'src="delta-tooltips.js?v=20260917"' in s
+          assert 'isNewerDataset(cached,EMBED)' in s
+          assert 'browser-notifications.js?v=20260917b' in s
+          assert 'delta-tooltips.js?v=20260917' in s
+          print('patched' if s!=original else 'already patched')
           PY
 
       - name: Commit frontend patch
