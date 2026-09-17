@@ -1,0 +1,58 @@
+name: Verify browser alert deployment
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/verify-browser-alerts.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check deployment and production alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, urllib.request, time
+          urls = {
+            'deployment': 'https://lois-ecb-liquidity-5ac7yo9wb-saksham190804s-projects.vercel.app',
+            'production': 'https://lois-ecb-liquidity.vercel.app',
+          }
+          time.sleep(20)
+          result = {}
+          for name, base in urls.items():
+              item = {}
+              for path in ['/', '/build-info.json', '/browser-notifications.js?v=20260917']:
+                  u = base + path
+                  try:
+                      req = urllib.request.Request(u, headers={'User-Agent':'ECB-Browser-Alert-Verify/1.0','Cache-Control':'no-cache'})
+                      with urllib.request.urlopen(req, timeout=45) as r:
+                          body = r.read(5_000_000).decode('utf-8','replace')
+                          item[path] = {'status':r.status,'final_url':r.geturl(),'body':body}
+                  except Exception as e:
+                      item[path] = {'error':repr(e)}
+              result[name] = item
+          compact = {}
+          for name,item in result.items():
+              home = item['/'].get('body','')
+              build = item['/build-info.json'].get('body','')
+              script = item['/browser-notifications.js?v=20260917'].get('body','')
+              compact[name] = {
+                  'home_status':item['/'].get('status'),
+                  'build_status':item['/build-info.json'].get('status'),
+                  'script_status':item['/browser-notifications.js?v=20260917'].get('status'),
+                  'notification_script_tag':'browser-notifications.js?v=20260917' in home,
+                  'notification_module':'ECB Excess Liquidity Updated' in script and 'Notification.requestPermission' in script,
+                  'build_v7':'7.0-browser-alerts' in build,
+                  'exliq_visible':'id="exliq-fab"' in home and 'display:none!important' not in home,
+              }
+          print(json.dumps(compact, indent=2))
+          d = compact['deployment']
+          assert d['home_status'] == 200 and d['script_status'] == 200 and d['notification_script_tag'] and d['notification_module'] and d['build_v7']
+          p = compact['production']
+          if not (p['home_status'] == 200 and p['notification_script_tag'] and p['notification_module'] and p['build_v7']):
+              raise SystemExit('Production alias has not switched to browser-alert build yet')
+          PY
