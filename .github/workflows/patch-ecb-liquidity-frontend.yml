@@ -31,7 +31,6 @@ jobs:
           s=p.read_text(encoding='utf-8')
           original=s
 
-          # Keep the freshness fix already used by the live dashboard.
           old_cloud="if((next.last_check||'')>=(data.last_check||'')){"
           new_cloud="if(isNewerDataset(next,data)){"
           if old_cloud in s: s=s.replace(old_cloud,new_cloud,1)
@@ -48,56 +47,68 @@ jobs:
               if marker not in s: raise SystemExit('loadCloud marker not found')
               s=s.replace(marker,helper+marker,1)
 
-          # Keep the working hover and browser-alert enhancements.
           hover_tags='<script defer src="browser-notifications.js?v=20260917b"></script><script defer src="delta-tooltips.js?v=20260917"></script>'
           if 'src="browser-notifications.js' not in s:
               s=s.replace('</head>',hover_tags+'</head>',1)
 
-          # Restore the real Data Analysis dashboard as the fourth tab.
-          analysis_tag='<script defer src="data-analysis.js?v=20260917c"></script>'
+          analysis_tag='<script defer src="data-analysis.js?v=20260917d"></script>'
           if 'src="data-analysis.js' not in s:
               s=s.replace('</head>',analysis_tag+'</head>',1)
-
-          tab_pattern=re.compile(r'(<button\b[^>]*\bdata-tab=["\']method["\'][^>]*>)(.*?)(</button>)',re.I|re.S)
-          if tab_pattern.search(s):
-              s=tab_pattern.sub(lambda m:m.group(1)+'<span class="key">4</span>Data Analysis'+m.group(3),s,count=1)
           else:
-              raise SystemExit('method tab not found')
+              s=re.sub(r'<script\s+defer\s+src=["\']data-analysis\.js\?v=[^"\']+["\']></script>',analysis_tag,s,count=1,flags=re.I)
 
-          # Month-end change must be the default heatmap view, not monthly average.
+          # Relabel the fourth navigation tab without changing its existing routing key.
+          tab_pattern=re.compile(r'(<button\b(?=[^>]*\bclass=["\'][^"\']*\btab\b[^"\']*["\'])(?=[^>]*\bdata-tab=["\'][^"\']+["\'])[^>]*>)(.*?)(</button>)',re.I|re.S)
+          tabs=list(tab_pattern.finditer(s))
+          if len(tabs)<4:
+              raise SystemExit(f'expected at least 4 tabs, found {len(tabs)}')
+          m=tabs[3]
+          replacement=m.group(1)+'<span class="key">4</span>Data Analysis'+m.group(3)
+          s=s[:m.start()]+replacement+s[m.end():]
+
+          # Month-end change is the initial heatmap metric.
           sel_pattern=re.compile(r'(<select\b[^>]*\bid=["\']heatmetric["\'][^>]*>)(.*?)(</select>)',re.I|re.S)
-          m=sel_pattern.search(s)
-          if not m:
+          hm=sel_pattern.search(s)
+          if not hm:
               raise SystemExit('heatmetric selector not found')
-          body=m.group(2)
+          body=hm.group(2)
           body=re.sub(r'\sselected(?:=["\'][^"\']*["\'])?','',body,flags=re.I)
           body2,n=re.subn(r'(<option\b[^>]*\bvalue=["\']change["\'][^>]*)(>)',r'\1 selected\2',body,count=1,flags=re.I)
           if n!=1:
               raise SystemExit('month-end change option not found')
-          s=s[:m.start()]+m.group(1)+body2+m.group(3)+s[m.end():]
-
+          s=s[:hm.start()]+hm.group(1)+body2+hm.group(3)+s[hm.end():]
           p.write_text(s,encoding='utf-8')
+
+          # Make the analysis sidecar target whatever the existing fourth-tab route is.
+          a=Path('ecb-liquidity/data-analysis.js')
+          js=a.read_text(encoding='utf-8')
+          js0=js
+          js=js.replace("const host=$('v-method');if(!host||!window.LOIS?.getData)return;","const tab=document.querySelector('.tabs .tab:nth-of-type(4)');const route=tab?.dataset?.tab||'method';const host=$('v-'+route)||$('v-method');if(!host||!window.LOIS?.getData)return;")
+          js=js.replace("function patchLabel(){document.querySelectorAll('.tab[data-tab=\"method\"]').forEach(b=>{b.innerHTML='<span class=\"key\">4</span>Data Analysis'})}","function patchLabel(){const b=document.querySelector('.tabs .tab:nth-of-type(4)');if(b)b.innerHTML='<span class=\"key\">4</span>Data Analysis'}")
+          js=js.replace("document.addEventListener('click',e=>{if(e.target.closest?.('.tab[data-tab=\"method\"]'))setTimeout(build,0)});","document.addEventListener('click',e=>{const b=e.target.closest?.('.tabs .tab');if(b&&b===document.querySelector('.tabs .tab:nth-of-type(4)'))setTimeout(build,0)});")
+          if js!=js0: a.write_text(js,encoding='utf-8')
 
           assert 'function isNewerDataset(' in s
           assert 'if(isNewerDataset(next,data)){' in s
           assert 'isNewerDataset(cached,EMBED)' in s
           assert 'browser-notifications.js?v=20260917b' in s
           assert 'delta-tooltips.js?v=20260917' in s
-          assert 'data-analysis.js?v=20260917c' in s
+          assert 'data-analysis.js?v=20260917d' in s
           assert 'Data Analysis' in s
           assert re.search(r'<option\b[^>]*\bvalue=["\']change["\'][^>]*\bselected\b',s,re.I)
-          print('patched' if s!=original else 'already patched')
+          assert "nth-of-type(4)" in js
+          print('index patched:',s!=original,'analysis patched:',js!=js0)
           PY
 
       - name: Commit frontend patch
         shell: bash
         run: |
-          if git diff --quiet -- ecb-liquidity/index.html; then
+          if git diff --quiet -- ecb-liquidity/index.html ecb-liquidity/data-analysis.js; then
             echo 'No changes to commit'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add ecb-liquidity/index.html
+          git add ecb-liquidity/index.html ecb-liquidity/data-analysis.js
           git commit -m 'Restore Data Analysis and month-end change default'
           git push origin HEAD:ecb-liquidity-dashboard-20260906
