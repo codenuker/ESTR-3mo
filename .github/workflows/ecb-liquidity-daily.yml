@@ -25,29 +25,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Send one-time 17 Sep Workflows replay
-        if: github.event_name == 'push'
-        env:
-          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
-        shell: bash
-        run: |
-          test -n "$TEAMS_WEBHOOK_URL"
-          python - <<'PY' > /tmp/teams-replay.json
-          import json
-          message = (
-            '<b>ECB LIQUIDITY UPDATE</b><br><br>'
-            '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">'
-            '<tr><td><b>Observation date</b></td><td>17 Sep 2026</td></tr>'
-            '<tr><td><b>Excess liquidity</b></td><td>EUR 2,131.380bn</td></tr>'
-            '<tr><td><b>Daily change</b></td><td>-8.487bn</td></tr>'
-            '<tr><td><b>Previous observation</b></td><td>16 Sep 2026 — EUR 2,139.867bn</td></tr>'
-            '<tr><td><b>Source</b></td><td>ECB</td></tr>'
-            '</table>'
-          )
-          print(json.dumps({'message': message}))
-          PY
-          curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' --data-binary @/tmp/teams-replay.json "$TEAMS_WEBHOOK_URL"
-
       - name: Capture previous published observation
         id: before
         shell: bash
