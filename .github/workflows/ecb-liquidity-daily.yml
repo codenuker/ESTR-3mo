@@ -25,6 +25,29 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Preview Teams table format
+        if: github.event_name == 'push'
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        shell: bash
+        run: |
+          test -n "$TEAMS_WEBHOOK_URL"
+          python - <<'PY' > /tmp/teams-table-test.json
+          import json
+          message = (
+            '<b>ECB LIQUIDITY UPDATE — TEST</b><br><br>'
+            '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">'
+            '<tr><td><b>Observation date</b></td><td>16 Sep 2026</td></tr>'
+            '<tr><td><b>Excess liquidity</b></td><td>EUR 2,139.867bn</td></tr>'
+            '<tr><td><b>Daily change</b></td><td>+6.751bn</td></tr>'
+            '<tr><td><b>Previous observation</b></td><td>15 Sep 2026 — EUR 2,133.116bn</td></tr>'
+            '<tr><td><b>Source</b></td><td>ECB</td></tr>'
+            '</table><br><i>Test message only.</i>'
+          )
+          print(json.dumps({'message': message}))
+          PY
+          curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' --data-binary @/tmp/teams-table-test.json "$TEAMS_WEBHOOK_URL"
+
       - name: Capture previous published observation
         id: before
         shell: bash
@@ -121,6 +144,16 @@ jobs:
           fi
           python - <<'PY' > /tmp/teams-payload.json
           import json, os
+          message = (
+            '<b>ECB LIQUIDITY UPDATE</b><br><br>'
+            '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">'
+            '<tr><td><b>Observation date</b></td><td>' + os.environ['OBS_DATE'] + '</td></tr>'
+            '<tr><td><b>Excess liquidity</b></td><td>EUR ' + os.environ['VALUE_BN'] + 'bn</td></tr>'
+            '<tr><td><b>Daily change</b></td><td>' + os.environ['CHANGE_BN'] + 'bn</td></tr>'
+            '<tr><td><b>Previous observation</b></td><td>' + os.environ['PREV_DATE'] + ' — EUR ' + os.environ['PREV_VALUE_BN'] + 'bn</td></tr>'
+            '<tr><td><b>Source</b></td><td>ECB</td></tr>'
+            '</table>'
+          )
           payload={
             'title':'ECB LIQUIDITY UPDATE',
             'observation_date':os.environ['OBS_DATE'],
@@ -129,13 +162,7 @@ jobs:
             'previous_observation_date':os.environ['PREV_DATE'],
             'previous_excess_liquidity_bn':os.environ['PREV_VALUE_BN'],
             'source':'ECB',
-            'dashboard_url':'https://lois-ecb-liquidity.vercel.app',
-            'message':('ECB LIQUIDITY UPDATE\n'
-              f"Observation: {os.environ['OBS_DATE']}\n"
-              f"Excess liquidity: EUR {os.environ['VALUE_BN']}bn\n"
-              f"Daily change: {os.environ['CHANGE_BN']}bn\n"
-              f"Previous: {os.environ['PREV_DATE']} - EUR {os.environ['PREV_VALUE_BN']}bn\n"
-              'Source: ECB\nDashboard: https://lois-ecb-liquidity.vercel.app')
+            'message':message
           }
           print(json.dumps(payload))
           PY
