@@ -25,44 +25,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Send latest ECB observation through Workflows
-        if: github.event_name == 'push'
-        env:
-          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
-        shell: bash
-        run: |
-          test -n "$TEAMS_WEBHOOK_URL"
-          python - <<'PY' > /tmp/teams-latest.json
-          import json
-          from pathlib import Path
-          rows=json.loads(Path('ecb-liquidity/data/liquidity.json').read_text())['records']
-          latest,prev=rows[-1],rows[-2]
-          value=float(latest['value'])/1000
-          prev_value=float(prev['value'])/1000
-          change=value-prev_value
-          message=(
-            '<b>ECB LIQUIDITY UPDATE</b><br><br>'
-            '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">'
-            f"<tr><td><b>Observation date</b></td><td>{latest['date']}</td></tr>"
-            f'<tr><td><b>Excess liquidity</b></td><td>EUR {value:,.3f}bn</td></tr>'
-            f'<tr><td><b>Daily change</b></td><td>{change:+,.3f}bn</td></tr>'
-            f"<tr><td><b>Previous observation</b></td><td>{prev['date']} — EUR {prev_value:,.3f}bn</td></tr>"
-            '<tr><td><b>Source</b></td><td>ECB</td></tr>'
-            '</table>'
-          )
-          print(json.dumps({
-            'title':'ECB LIQUIDITY UPDATE',
-            'observation_date':latest['date'],
-            'excess_liquidity_bn':f'{value:.3f}',
-            'daily_change_bn':f'{change:+.3f}',
-            'previous_observation_date':prev['date'],
-            'previous_excess_liquidity_bn':f'{prev_value:.3f}',
-            'source':'ECB',
-            'message':message
-          }))
-          PY
-          curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' --data-binary @/tmp/teams-latest.json "$TEAMS_WEBHOOK_URL"
-
       - name: Capture previous published observation
         id: before
         shell: bash
