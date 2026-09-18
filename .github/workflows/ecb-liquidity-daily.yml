@@ -25,45 +25,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Send last 10 weekday observations through Workflows
-        if: github.event_name == 'push'
-        env:
-          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
-        shell: bash
-        run: |
-          test -n "$TEAMS_WEBHOOK_URL"
-          python - <<'PY' > /tmp/teams-last10.json
-          import json
-          from datetime import date, datetime
-          from pathlib import Path
-          all_rows=json.loads(Path('ecb-liquidity/data/liquidity.json').read_text())['records']
-          weekdays=[r for r in all_rows if date.fromisoformat(r['date']).weekday()<5]
-          selected=weekdays[-10:]
-          prior={r['date']: weekdays[i-1] if i else None for i,r in enumerate(weekdays)}
-          body=[
-            '<b>ECB LIQUIDITY — LAST 10 PUBLISHED DAYS</b><br><br>',
-            '<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">',
-            '<tr><th>Date</th><th>Excess liquidity</th><th>Daily change</th></tr>'
-          ]
-          for r in selected:
-            p=prior[r['date']]
-            value=float(r['value'])/1000
-            change=(float(r['value'])-float(p['value']))/1000 if p else 0
-            shown=datetime.strptime(r['date'],'%Y-%m-%d').strftime('%d %b %Y')
-            body.append(
-              f'<tr><td>{shown}</td><td>EUR {value:,.3f}bn</td>'
-              f'<td>{change:+,.3f}bn</td></tr>'
-            )
-          body.append('</table><br><b>Source:</b> ECB')
-          payload={
-            'title':'ECB LIQUIDITY — LAST 10 PUBLISHED DAYS',
-            'source':'ECB',
-            'message':' '.join(body)
-          }
-          print(json.dumps(payload))
-          PY
-          curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' --data-binary @/tmp/teams-last10.json "$TEAMS_WEBHOOK_URL"
-
       - name: Capture previous published observation
         id: before
         shell: bash
