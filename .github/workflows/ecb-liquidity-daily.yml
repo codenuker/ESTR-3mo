@@ -25,6 +25,27 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Test Adaptive Card webhook
+        if: github.event_name == 'push'
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        shell: bash
+        run: |
+          test -n "$TEAMS_WEBHOOK_URL"
+          cat > /tmp/teams-card-test.json <<'JSON'
+          {
+            "title": "ECB LIQUIDITY UPDATE",
+            "observation_date": "16 Sep 2026",
+            "excess_liquidity_bn": "2,139.867",
+            "daily_change_bn": "+6.751",
+            "previous_observation_date": "15 Sep 2026",
+            "previous_excess_liquidity_bn": "2,133.116",
+            "source": "ECB",
+            "message": "ECB LIQUIDITY UPDATE"
+          }
+          JSON
+          curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' --data-binary @/tmp/teams-card-test.json "$TEAMS_WEBHOOK_URL"
+
       - name: Capture previous published observation
         id: before
         shell: bash
