@@ -25,6 +25,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Capture previous published observation
+        id: before
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          p=Path('ecb-liquidity/data/liquidity.json')
+          d=json.loads(p.read_text()) if p.exists() else {}
+          rows=d.get('records') or []
+          if rows:
+              r=rows[-1]
+              print(f"date={r.get('date','')}")
+              print(f"value={r.get('value','')}")
+          else:
+              print("date=")
+              print("value=")
+          PY
       - name: Download and validate official ECB data
         id: collect
         continue-on-error: true
@@ -56,6 +74,72 @@ jobs:
               git push origin HEAD:ecb-liquidity-dashboard-20260906
             fi
           fi
+      - name: Prepare new-observation alert
+        id: alert
+        if: always()
+        shell: bash
+        run: |
+          BEFORE_DATE='${{ steps.before.outputs.date }}' python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          from pathlib import Path
+          p=Path('ecb-liquidity/data/liquidity.json')
+          d=json.loads(p.read_text()) if p.exists() else {}
+          rows=d.get('records') or []
+          old=os.environ.get('BEFORE_DATE','')
+          if not rows:
+              print('new=false')
+              raise SystemExit
+          latest=rows[-1]
+          if not old or latest.get('date','') <= old:
+              print('new=false')
+              raise SystemExit
+          prev=rows[-2] if len(rows)>1 else {}
+          value=float(latest.get('value',0))/1000
+          prev_value=float(prev.get('value',0))/1000 if prev.get('value') is not None else None
+          change=(value-prev_value) if prev_value is not None else None
+          print('new=true')
+          print(f"date={latest.get('date','')}")
+          print(f"value_bn={value:.3f}")
+          print(f"prev_date={prev.get('date','')}")
+          print(f"prev_value_bn={prev_value:.3f}" if prev_value is not None else 'prev_value_bn=')
+          print(f"change_bn={change:+.3f}" if change is not None else 'change_bn=')
+          PY
+      - name: Send ECB liquidity update to Teams
+        if: steps.alert.outputs.new == 'true'
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          OBS_DATE: ${{ steps.alert.outputs.date }}
+          VALUE_BN: ${{ steps.alert.outputs.value_bn }}
+          PREV_DATE: ${{ steps.alert.outputs.prev_date }}
+          PREV_VALUE_BN: ${{ steps.alert.outputs.prev_value_bn }}
+          CHANGE_BN: ${{ steps.alert.outputs.change_bn }}
+        shell: bash
+        run: |
+          if [ -z "$TEAMS_WEBHOOK_URL" ]; then
+            echo "TEAMS_WEBHOOK_URL is not configured; dashboard update succeeded but Teams webhook delivery is skipped."
+            exit 0
+          fi
+          python - <<'PY' > /tmp/teams-payload.json
+          import json, os
+          payload={
+            'title':'ECB LIQUIDITY UPDATE',
+            'observation_date':os.environ['OBS_DATE'],
+            'excess_liquidity_bn':os.environ['VALUE_BN'],
+            'daily_change_bn':os.environ['CHANGE_BN'],
+            'previous_observation_date':os.environ['PREV_DATE'],
+            'previous_excess_liquidity_bn':os.environ['PREV_VALUE_BN'],
+            'source':'ECB',
+            'dashboard_url':'https://lois-ecb-liquidity.vercel.app',
+            'message':('ECB LIQUIDITY UPDATE\n'
+              f"Observation: {os.environ['OBS_DATE']}\n"
+              f"Excess liquidity: EUR {os.environ['VALUE_BN']}bn\n"
+              f"Daily change: {os.environ['CHANGE_BN']}bn\n"
+              f"Previous: {os.environ['PREV_DATE']} - EUR {os.environ['PREV_VALUE_BN']}bn\n"
+              'Source: ECB\nDashboard: https://lois-ecb-liquidity.vercel.app')
+          }
+          print(json.dumps(payload))
+          PY
+          curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' --data-binary @/tmp/teams-payload.json "$TEAMS_WEBHOOK_URL"
       - name: Preserve downloadable snapshot
         if: always()
         uses: actions/upload-artifact@v4
