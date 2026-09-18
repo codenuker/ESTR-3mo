@@ -25,18 +25,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Test Teams webhook wiring
-        if: github.event_name == 'push'
-        env:
-          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
-        shell: bash
-        run: |
-          test -n "$TEAMS_WEBHOOK_URL"
-          python - <<'PY' > /tmp/teams-test.json
-          import json
-          print(json.dumps({'message':'ECB LIQUIDITY ALERT TEST\nDashboard-linked delivery is working. Future messages will be sent from the ECB collector when a new observation date is detected.'}))
-          PY
-          curl --fail-with-body --silent --show-error -H 'Content-Type: application/json' --data-binary @/tmp/teams-test.json "$TEAMS_WEBHOOK_URL"
       - name: Capture previous published observation
         id: before
         shell: bash
