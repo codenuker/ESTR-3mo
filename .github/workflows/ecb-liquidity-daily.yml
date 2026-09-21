@@ -1,8 +1,7 @@
 name: ECB liquidity daily updates
 on:
   schedule:
-    - cron: '13,43 8-17 * * 1-5'
-    - cron: '13 6,20 * * 1-5'
+    - cron: '7,22,37,52 6-20 * * 1-5'
   workflow_dispatch:
   push:
     branches: [main]
@@ -58,8 +57,8 @@ jobs:
               if not path.exists():
                   continue
               data = json.loads(path.read_text())
-              data['schedule_utc'] = '13,43 8-17 * * 1-5; 13 6,20 * * 1-5'
-              data['schedule_note'] = 'Weekdays: 08:13-17:43 UTC every 30 minutes; extra checks at 06:13 and 20:13 UTC. Scheduled runs may be delayed.'
+              data['schedule_utc'] = '7,22,37,52 6-20 * * 1-5'
+              data['schedule_note'] = 'Weekdays: 06:07-20:52 UTC every 15 minutes. Scheduled runs may be delayed.'
               path.write_text(json.dumps(data, separators=(',', ':'), allow_nan=False) if name == 'liquidity.json' else json.dumps(data, indent=2, allow_nan=False))
           PY
       - name: Persist dataset and visible refresh diagnostics
