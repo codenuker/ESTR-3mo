@@ -83,7 +83,7 @@ def collect(source_dir=None):
     old=json.loads(path.read_text()) if path.exists() else {}
     raw={r['date']:dict(r) for r in old.get('records',[])}
     sources={r['url']:r for r in old.get('sources',[])}
-    state=dict(old.get('archive_state',{})); warnings=[]; fresh=0; today=datetime.now(timezone.utc).date()
+    state=dict(old.get('archive_state',{})); warnings=[]; source_warnings=[]; fresh=0; today=datetime.now(timezone.utc).date()
     jobs=[(str(y),ARCHIVE+f'liq_daily_{y}.zip') for y in range(2021,today.year+1)]+[('api',API)]
     manifest={r['name']:r for r in json.loads((source_dir/'manifest.json').read_text())} if source_dir else {}
     def retrieve(job):
@@ -103,7 +103,7 @@ def collect(source_dir=None):
         for future in as_completed(futures):
             try:
                 name,values,meta=future.result(); successful[name]=(values,meta)
-            except Exception as exc: warnings.append(f'{futures[future]}: {exc}')
+            except Exception as exc: source_warnings.append(f'{futures[future]}: {exc}')
     for name,url in jobs:
         if name not in successful: continue
         values,meta=successful[name]; sources[url]=meta; fresh+=1
@@ -112,6 +112,9 @@ def collect(source_dir=None):
             if name!='api': prev.pop('observation_status',None)
             prev.update(rec)
         if name!='api': state[name]={'rows':len(values),'retrieved_at':meta['retrieved_at'],'sha256':meta['sha256']}
+    # The current-year archive is an independent official ECB source. If it succeeds,
+    # keep an API outage in diagnostics without presenting the dataset as unhealthy.
+    warnings=[w for w in source_warnings if not (w.startswith('api:') and str(today.year) in successful)]
     records=[]
     for day,r in sorted(raw.items()):
         if not ('2021-01-01'<=day<=today.isoformat()): continue
@@ -143,7 +146,7 @@ def collect(source_dir=None):
     if not latest_data_check_succeeded:
         warnings.insert(0,'Latest-data source check did not succeed; cached observations retained')
     current_success=max((successful[name][1]['retrieved_at'] for name in current_sources),default=None)
-    result={'schema_version':1,'unit':'EUR millions','records':records,'sources':list(sources.values()),'archive_state':state,'last_check':stamp(),'last_success':current_success if latest_data_check_succeeded else old.get('last_success'),'latest_data_check_succeeded':latest_data_check_succeeded,'latest_source_date':current_latest,'history_complete':complete,'status':('ok' if complete and not warnings and latest_data_check_succeeded else 'partial') if fresh else 'error','warnings':warnings,'missing_years':missing_years,'missing_weekdays':missing,'weekday_observations':weekdays,'crosscheck_review_rows':sum(r['check']=='review' for r in records),'revised_rows':revised,'analytics_basis':'Published Monday-Friday observations by default; all published dates retained in raw data','collector':'GitHub Actions / official ECB sources','schedule_utc':'13,43 8-17 * * 1-5; 13 6,20 * * 1-5','schedule_note':'Weekdays: 08:13-17:43 UTC every 30 minutes; extra checks at 06:13 and 20:13 UTC. Scheduled runs may be delayed.','offline_import':bool(source_dir)}
+    result={'schema_version':1,'unit':'EUR millions','records':records,'sources':list(sources.values()),'archive_state':state,'last_check':stamp(),'last_success':current_success if latest_data_check_succeeded else old.get('last_success'),'latest_data_check_succeeded':latest_data_check_succeeded,'latest_source_date':current_latest,'history_complete':complete,'status':('ok' if complete and not warnings and latest_data_check_succeeded else 'partial') if fresh else 'error','warnings':warnings,'source_warnings':source_warnings,'missing_years':missing_years,'missing_weekdays':missing,'weekday_observations':weekdays,'crosscheck_review_rows':sum(r['check']=='review' for r in records),'revised_rows':revised,'analytics_basis':'Published Monday-Friday observations by default; all published dates retained in raw data','collector':'GitHub Actions / official ECB sources','schedule_utc':'7,22,37,52 6-20 * * 1-5','schedule_note':'Weekdays: 06:07-20:52 UTC every 15 minutes. Scheduled runs may be delayed.','offline_import':bool(source_dir)}
     atomic(path,json.dumps(result,allow_nan=False,separators=(',',':')))
     fields=['date','value','reported','computed',*COMP,'difference','check','method','source']
     s=io.StringIO(); w=csv.DictWriter(s,fieldnames=fields,extrasaction='ignore'); w.writeheader(); w.writerows(records)
