@@ -62,13 +62,38 @@ jobs:
               data['schedule_note'] = 'Weekdays: 05:03-22:53 UTC every 10 minutes. Scheduled runs may be delayed.'
               path.write_text(json.dumps(data, separators=(',', ':'), allow_nan=False) if name == 'liquidity.json' else json.dumps(data, indent=2, allow_nan=False))
           PY
+      - name: Refresh embedded dashboard fallback when source advances
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          index = Path('ecb-liquidity/index.html')
+          dataset = Path('ecb-liquidity/data/liquidity.json')
+          if not index.exists() or not dataset.exists():
+              raise SystemExit
+          html = index.read_text()
+          marker = '<script id="embedded-data" type="application/json">'
+          start = html.index(marker) + len(marker)
+          end = html.index('</script>', start)
+          current = json.loads(html[start:end])
+          latest = json.loads(dataset.read_text())
+          current_date = (current.get('records') or [{}])[-1].get('date', '')
+          latest_date = (latest.get('records') or [{}])[-1].get('date', '')
+          if latest_date > current_date:
+              packed = json.dumps(latest, separators=(',', ':'), allow_nan=False)
+              index.write_text(html[:start] + packed + html[end:])
+              print(f'Embedded fallback advanced from {current_date} to {latest_date}')
+          else:
+              print(f'Embedded fallback already current at {current_date}')
+          PY
       - name: Persist dataset and visible refresh diagnostics
         if: always()
         run: |
           if [ -f ecb-liquidity/data/liquidity.json ]; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add ecb-liquidity/data/
+            git add ecb-liquidity/data/ ecb-liquidity/index.html
             if ! git diff --cached --quiet; then
               git commit -m "Update official ECB excess liquidity $(date -u +%F)"
               git push origin HEAD:ecb-liquidity-dashboard-20260906
