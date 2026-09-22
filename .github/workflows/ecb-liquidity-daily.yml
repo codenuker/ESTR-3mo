@@ -1,7 +1,7 @@
 name: ECB liquidity daily updates
 on:
   schedule:
-    - cron: '7,22,37,52 6-20 * * 1-5'
+    - cron: '3,13,23,33,43,53 5-22 * * 1-5'
   workflow_dispatch:
   push:
     branches: [main]
@@ -34,8 +34,9 @@ jobs:
           p=Path('ecb-liquidity/data/liquidity.json')
           d=json.loads(p.read_text()) if p.exists() else {}
           rows=d.get('records') or []
-          if rows:
-              r=rows[-1]
+          weekdays=[r for r in rows if r.get('date') and __import__('datetime').date.fromisoformat(r['date']).weekday() < 5]
+          if weekdays:
+              r=weekdays[-1]
               print(f"date={r.get('date','')}")
               print(f"value={r.get('value','')}")
           else:
@@ -57,8 +58,8 @@ jobs:
               if not path.exists():
                   continue
               data = json.loads(path.read_text())
-              data['schedule_utc'] = '7,22,37,52 6-20 * * 1-5'
-              data['schedule_note'] = 'Weekdays: 06:07-20:52 UTC every 15 minutes. Scheduled runs may be delayed.'
+              data['schedule_utc'] = '3,13,23,33,43,53 5-22 * * 1-5'
+              data['schedule_note'] = 'Weekdays: 05:03-22:53 UTC every 10 minutes. Scheduled runs may be delayed.'
               path.write_text(json.dumps(data, separators=(',', ':'), allow_nan=False) if name == 'liquidity.json' else json.dumps(data, indent=2, allow_nan=False))
           PY
       - name: Persist dataset and visible refresh diagnostics
@@ -84,15 +85,16 @@ jobs:
           p=Path('ecb-liquidity/data/liquidity.json')
           d=json.loads(p.read_text()) if p.exists() else {}
           rows=d.get('records') or []
+          weekdays=[r for r in rows if r.get('date') and __import__('datetime').date.fromisoformat(r['date']).weekday() < 5]
           old=os.environ.get('BEFORE_DATE','')
-          if not rows:
+          if not weekdays:
               print('new=false')
               raise SystemExit
-          latest=rows[-1]
+          latest=weekdays[-1]
           if not old or latest.get('date','') <= old:
               print('new=false')
               raise SystemExit
-          prev=rows[-2] if len(rows)>1 else {}
+          prev=weekdays[-2] if len(weekdays)>1 else {}
           value=float(latest.get('value',0))/1000
           prev_value=float(prev.get('value',0))/1000 if prev.get('value') is not None else None
           change=(value-prev_value) if prev_value is not None else None
