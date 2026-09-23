@@ -174,8 +174,6 @@ jobs:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
           OBS_DATE: ${{ steps.alert.outputs.date }}
           VALUE_BN: ${{ steps.alert.outputs.value_bn }}
-          PREV_DATE: ${{ steps.alert.outputs.prev_date }}
-          PREV_VALUE_BN: ${{ steps.alert.outputs.prev_value_bn }}
           CHANGE_BN: ${{ steps.alert.outputs.change_bn }}
           WEEK_CHANGE_BN: ${{ steps.alert.outputs.week_change_bn }}
           WEEK_REF_DATE: ${{ steps.alert.outputs.week_ref_date }}
@@ -204,7 +202,6 @@ jobs:
             '<tr><td><b>Daily change</b></td><td>' + colour_change(os.environ['CHANGE_BN']) + '</td></tr>'
             '<tr><td><b>1-week change</b></td><td>' + colour_change(os.environ['WEEK_CHANGE_BN']) + ' (vs ' + os.environ['WEEK_REF_DATE'] + ')</td></tr>'
             '<tr><td><b>1-month change</b></td><td>' + colour_change(os.environ['MONTH_CHANGE_BN']) + ' (vs ' + os.environ['MONTH_REF_DATE'] + ')</td></tr>'
-            '<tr><td><b>Previous observation</b></td><td>' + os.environ['PREV_DATE'] + ' — EUR ' + os.environ['PREV_VALUE_BN'] + 'bn</td></tr>'
             '<tr><td><b>Source</b></td><td>ECB</td></tr>'
             '</table>'
           )
@@ -217,8 +214,6 @@ jobs:
             'weekly_reference_date':os.environ['WEEK_REF_DATE'],
             'monthly_change_bn':os.environ['MONTH_CHANGE_BN'],
             'monthly_reference_date':os.environ['MONTH_REF_DATE'],
-            'previous_observation_date':os.environ['PREV_DATE'],
-            'previous_excess_liquidity_bn':os.environ['PREV_VALUE_BN'],
             'source':'ECB',
             'message':message
           }
