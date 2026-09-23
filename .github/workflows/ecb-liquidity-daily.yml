@@ -99,6 +99,26 @@ jobs:
               git push origin HEAD:ecb-liquidity-dashboard-20260906
             fi
           fi
+      - name: Publish refreshed dashboard to Vercel production branch
+        if: always()
+        shell: bash
+        run: |
+          if [ ! -f ecb-liquidity/index.html ] || [ ! -f ecb-liquidity/data/liquidity.json ]; then
+            echo "Dashboard files are unavailable; skipping production sync."
+            exit 0
+          fi
+          git fetch origin main --depth=1
+          git switch -C publish-main origin/main
+          git checkout ecb-liquidity-dashboard-20260906 -- ecb-liquidity
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ecb-liquidity
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish latest ECB liquidity dashboard $(date -u +%F)"
+            git push origin HEAD:main
+          else
+            echo "Production dashboard is already synchronized."
+          fi
       - name: Prepare new-observation alert
         id: alert
         if: always()
