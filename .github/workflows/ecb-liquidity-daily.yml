@@ -126,6 +126,7 @@ jobs:
         run: |
           BEFORE_DATE='${{ steps.before.outputs.date }}' python - <<'PY' >> "$GITHUB_OUTPUT"
           import json, os
+          from datetime import date, timedelta
           from pathlib import Path
           p=Path('ecb-liquidity/data/liquidity.json')
           d=json.loads(p.read_text()) if p.exists() else {}
@@ -143,12 +144,29 @@ jobs:
           value=float(latest.get('value',0))/1000
           prev_value=float(prev.get('value',0))/1000 if prev.get('value') is not None else None
           change=(value-prev_value) if prev_value is not None else None
+          latest_day=date.fromisoformat(latest['date'])
+          def reference(days, max_lag=4):
+              target=latest_day-timedelta(days=days)
+              candidates=[r for r in weekdays if date.fromisoformat(r['date']) <= target]
+              if not candidates:
+                  return None
+              ref=candidates[-1]
+              lag=(target-date.fromisoformat(ref['date'])).days
+              return ref if lag <= max_lag else None
+          week_ref=reference(7)
+          month_ref=reference(30)
+          week_change=(value-float(week_ref['value'])/1000) if week_ref else None
+          month_change=(value-float(month_ref['value'])/1000) if month_ref else None
           print('new=true')
           print(f"date={latest.get('date','')}")
           print(f"value_bn={value:.3f}")
           print(f"prev_date={prev.get('date','')}")
           print(f"prev_value_bn={prev_value:.3f}" if prev_value is not None else 'prev_value_bn=')
           print(f"change_bn={change:+.3f}" if change is not None else 'change_bn=')
+          print(f"week_change_bn={week_change:+.3f}" if week_change is not None else 'week_change_bn=')
+          print(f"week_ref_date={week_ref.get('date','')}" if week_ref else 'week_ref_date=')
+          print(f"month_change_bn={month_change:+.3f}" if month_change is not None else 'month_change_bn=')
+          print(f"month_ref_date={month_ref.get('date','')}" if month_ref else 'month_ref_date=')
           PY
       - name: Send ECB liquidity update to Teams
         if: steps.alert.outputs.new == 'true'
@@ -159,6 +177,10 @@ jobs:
           PREV_DATE: ${{ steps.alert.outputs.prev_date }}
           PREV_VALUE_BN: ${{ steps.alert.outputs.prev_value_bn }}
           CHANGE_BN: ${{ steps.alert.outputs.change_bn }}
+          WEEK_CHANGE_BN: ${{ steps.alert.outputs.week_change_bn }}
+          WEEK_REF_DATE: ${{ steps.alert.outputs.week_ref_date }}
+          MONTH_CHANGE_BN: ${{ steps.alert.outputs.month_change_bn }}
+          MONTH_REF_DATE: ${{ steps.alert.outputs.month_ref_date }}
         shell: bash
         run: |
           if [ -z "$TEAMS_WEBHOOK_URL" ]; then
@@ -173,6 +195,8 @@ jobs:
             '<tr><td><b>Observation date</b></td><td>' + os.environ['OBS_DATE'] + '</td></tr>'
             '<tr><td><b>Excess liquidity</b></td><td>EUR ' + os.environ['VALUE_BN'] + 'bn</td></tr>'
             '<tr><td><b>Daily change</b></td><td>' + os.environ['CHANGE_BN'] + 'bn</td></tr>'
+            '<tr><td><b>1-week change</b></td><td>' + os.environ['WEEK_CHANGE_BN'] + 'bn (vs ' + os.environ['WEEK_REF_DATE'] + ')</td></tr>'
+            '<tr><td><b>1-month change</b></td><td>' + os.environ['MONTH_CHANGE_BN'] + 'bn (vs ' + os.environ['MONTH_REF_DATE'] + ')</td></tr>'
             '<tr><td><b>Previous observation</b></td><td>' + os.environ['PREV_DATE'] + ' — EUR ' + os.environ['PREV_VALUE_BN'] + 'bn</td></tr>'
             '<tr><td><b>Source</b></td><td>ECB</td></tr>'
             '</table>'
@@ -182,6 +206,10 @@ jobs:
             'observation_date':os.environ['OBS_DATE'],
             'excess_liquidity_bn':os.environ['VALUE_BN'],
             'daily_change_bn':os.environ['CHANGE_BN'],
+            'weekly_change_bn':os.environ['WEEK_CHANGE_BN'],
+            'weekly_reference_date':os.environ['WEEK_REF_DATE'],
+            'monthly_change_bn':os.environ['MONTH_CHANGE_BN'],
+            'monthly_reference_date':os.environ['MONTH_REF_DATE'],
             'previous_observation_date':os.environ['PREV_DATE'],
             'previous_excess_liquidity_bn':os.environ['PREV_VALUE_BN'],
             'source':'ECB',
