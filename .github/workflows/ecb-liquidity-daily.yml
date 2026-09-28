@@ -154,7 +154,8 @@ jobs:
               lag=(target-date.fromisoformat(ref['date'])).days
               return ref if lag <= max_lag else None
           week_ref=reference(7)
-          month_ref=reference(30)
+          month_candidates=[r for r in weekdays if date.fromisoformat(r['date']).year == latest_day.year and date.fromisoformat(r['date']).month == latest_day.month]
+          month_ref=month_candidates[0] if month_candidates else None
           week_change=(value-float(week_ref['value'])/1000) if week_ref else None
           month_change=(value-float(month_ref['value'])/1000) if month_ref else None
           print('new=true')
@@ -200,8 +201,8 @@ jobs:
             '<tr><td><b>Observation date</b></td><td>' + os.environ['OBS_DATE'] + '</td></tr>'
             '<tr><td><b>Excess liquidity</b></td><td>EUR ' + os.environ['VALUE_BN'] + 'bn</td></tr>'
             '<tr><td><b>Daily change</b></td><td>' + colour_change(os.environ['CHANGE_BN']) + '</td></tr>'
-            '<tr><td><b>1-week change</b></td><td>' + colour_change(os.environ['WEEK_CHANGE_BN']) + ' (vs ' + os.environ['WEEK_REF_DATE'] + ')</td></tr>'
-            '<tr><td><b>1-month change</b></td><td>' + colour_change(os.environ['MONTH_CHANGE_BN']) + ' (vs ' + os.environ['MONTH_REF_DATE'] + ')</td></tr>'
+            '<tr><td><b>Rolling 1-week change</b></td><td>' + colour_change(os.environ['WEEK_CHANGE_BN']) + ' (vs ' + os.environ['WEEK_REF_DATE'] + ')</td></tr>'
+            '<tr><td><b>This month change</b></td><td>' + colour_change(os.environ['MONTH_CHANGE_BN']) + ' (vs ' + os.environ['MONTH_REF_DATE'] + ')</td></tr>'
             '<tr><td><b>Source</b></td><td>ECB</td></tr>'
             '</table>'
           )
