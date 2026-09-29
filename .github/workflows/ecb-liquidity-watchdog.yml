@@ -20,4 +20,8 @@ jobs:
       - name: Trigger the primary ECB liquidity refresh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run ecb-liquidity-daily.yml --ref main
+        run: |
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ecb-liquidity-daily.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[send_current]=false'
