@@ -1,7 +1,7 @@
 name: ECB liquidity daily updates
 on:
   schedule:
-    - cron: '3,13,23,33,43,53 5-22 * * 1-5'
+    - cron: '3-53/10 * * * 1-5'
   workflow_dispatch:
     inputs:
       send_current:
@@ -64,8 +64,8 @@ jobs:
               if not path.exists():
                   continue
               data = json.loads(path.read_text())
-              data['schedule_utc'] = '3,13,23,33,43,53 5-22 * * 1-5'
-              data['schedule_note'] = 'Weekdays: 05:03-22:53 UTC every 10 minutes. Scheduled runs may be delayed.'
+              data['schedule_utc'] = '3-53/10 * * * 1-5'
+              data['schedule_note'] = 'Weekdays: every 10 minutes at :03/:13/:23/:33/:43/:53 UTC. Scheduled runs may be delayed.'
               path.write_text(json.dumps(data, separators=(',', ':'), allow_nan=False) if name == 'liquidity.json' else json.dumps(data, indent=2, allow_nan=False))
           PY
       - name: Refresh embedded dashboard fallback when source advances
