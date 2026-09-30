@@ -2,7 +2,12 @@ name: ECB liquidity watchdog
 
 on:
   schedule:
-    - cron: '8-58/10 * * * 1-5'
+    - cron: '8 * * * 1-5'
+    - cron: '18 * * * 1-5'
+    - cron: '28 * * * 1-5'
+    - cron: '38 * * * 1-5'
+    - cron: '48 * * * 1-5'
+    - cron: '58 * * * 1-5'
   workflow_dispatch:
 
 permissions:
