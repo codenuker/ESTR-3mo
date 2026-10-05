@@ -1,5 +1,5 @@
 name: ECB liquidity daily updates
-# Recovery refresh: 2026-10-02
+# Recovery refresh: 2026-10-05
 on:
   schedule:
     - cron: '3 * * * 1-5'
