@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "unit": "EUR millions",
-  "last_check": "2026-10-31T00:59:11+00:00",
-  "last_success": "2026-10-31T00:59:11+00:00",
+  "last_check": "2026-10-31T01:05:54+00:00",
+  "last_success": "2026-10-31T01:05:54+00:00",
   "latest_data_check_succeeded": true,
   "latest_source_date": "2026-10-29",
   "history_complete": true,
